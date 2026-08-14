@@ -1,0 +1,120 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // =========================================================================
+    // ROLE-BASED ACCESS CONTROL (RBAC) HELPER FUNCTIONS
+    // =========================================================================
+
+    // Verify user is authenticated with Firebase Auth
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Extract custom claim role
+    function getRole() {
+      return request.auth.token.role;
+    }
+
+    // Role definitions
+    function isSuperAdmin() {
+      return isAuthenticated() && (
+        getRole() == 'super_admin' || 
+        request.auth.token.admin == true
+      );
+    }
+
+    function isAppManager() {
+      return isAuthenticated() && (
+        getRole() == 'app_manager' || 
+        isSuperAdmin()
+      );
+    }
+
+    function isMarketingAdmin() {
+      return isAuthenticated() && (
+        getRole() == 'marketing_admin' || 
+        isSuperAdmin()
+      );
+    }
+
+    // Granular permission check in custom claims array
+    function hasPermission(perm) {
+      return isSuperAdmin() || (
+        isAuthenticated() && 
+        request.auth.token.permissions != null && 
+        perm in request.auth.token.permissions
+      );
+    }
+
+    // =========================================================================
+    // 1. APP USERS COLLECTION (/users/{userId})
+    // =========================================================================
+    // - Super Admin: Full read/write/delete/export
+    // - App Manager: Read and update user profile / subscription tier
+    // - Marketing Admin: STRICTLY FORBIDDEN from reading user lists or PII
+    // - End User: Read/write own document only
+    match /users/{userId} {
+      allow read: if isSuperAdmin() || isAppManager() || (isAuthenticated() && request.auth.uid == userId);
+      allow create: if isSuperAdmin() || isAppManager() || (isAuthenticated() && request.auth.uid == userId);
+      allow update: if isSuperAdmin() || (isAppManager() && hasPermission('users:edit')) || (isAuthenticated() && request.auth.uid == userId);
+      allow delete: if isSuperAdmin() || (isAppManager() && hasPermission('users:delete'));
+    }
+
+    // =========================================================================
+    // 2. FCM PUSH CAMPAIGNS (/campaigns/{campaignId})
+    // =========================================================================
+    // - Super Admin & Marketing Admin: Full access to compose and broadcast
+    // - App Manager: Restricted from viewing or creating marketing campaigns
+    match /campaigns/{campaignId} {
+      allow read: if isSuperAdmin() || isMarketingAdmin();
+      allow create, update: if isSuperAdmin() || (isMarketingAdmin() && hasPermission('fcm:compose'));
+      allow delete: if isSuperAdmin();
+    }
+
+    // Push token registry (tokens uploaded by mobile clients)
+    match /device_tokens/{tokenId} {
+      allow read: if isSuperAdmin() || isMarketingAdmin();
+      allow write: if isAuthenticated();
+    }
+
+    // =========================================================================
+    // 3. CRASHLYTICS & OPERATIONAL LOGS (/crash_issues/{issueId})
+    // =========================================================================
+    // - Super Admin & App Manager: Read and manage issue status / stack traces
+    // - Marketing Admin: Restricted
+    match /crash_issues/{issueId} {
+      allow read: if isSuperAdmin() || isAppManager();
+      allow update: if isSuperAdmin() || (isAppManager() && hasPermission('crashlytics:manage_issues'));
+      allow create, delete: if isSuperAdmin();
+    }
+
+    // =========================================================================
+    // 4. ADMIN ACCOUNTS & ROLE ASSIGNMENTS (/admins/{adminId})
+    // =========================================================================
+    // - Super Admin ONLY. Neither App Manager nor Marketing Admin can alter roles.
+    match /admins/{adminId} {
+      allow read: if isSuperAdmin() || (isAuthenticated() && request.auth.uid == adminId);
+      allow write: if isSuperAdmin();
+    }
+
+    // =========================================================================
+    // 5. IMMUTABLE AUDIT LOGS (/audit_logs/{logId})
+    // =========================================================================
+    // - Read: Super Admin (all), App Manager & Marketing Admin (limited read)
+    // - Write: Backend Cloud Functions / Authenticated Admins
+    match /audit_logs/{logId} {
+      allow read: if isSuperAdmin() || isAppManager() || isMarketingAdmin();
+      allow create: if isAuthenticated();
+      allow update, delete: if false; // Append-only audit trail
+    }
+
+    // =========================================================================
+    // 6. FINANCIAL & REVENUE METRICS (/financials/{docId})
+    // =========================================================================
+    // - Super Admin ONLY.
+    match /financials/{docId} {
+      allow read, write: if isSuperAdmin();
+    }
+  }
+}
