@@ -76,7 +76,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
       {/* Welcome Banner */}
       <div
         style={{
-          background: 'linear-gradient(135deg, rgba(30, 41, 59, 0.7) 0%, rgba(15, 23, 42, 0.9) 100%)',
+          background: 'linear-gradient(135deg, #ffffff 0%, #f1f5f9 100%)',
           border: '1px solid var(--border-subtle)',
           borderRadius: 'var(--radius-lg)',
           padding: '24px 28px',
@@ -86,6 +86,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
           justifyContent: 'space-between',
           flexWrap: 'wrap',
           gap: '16px',
+          boxShadow: 'var(--shadow-sm)',
         }}
       >
         <div>
@@ -205,7 +206,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
           ) : (
             <>
               <div className="metric-stat-value">{openCrashesCount === 0 ? '100%' : '99.78%'}</div>
-              <div className="metric-stat-sub" style={{ color: '#93c5fd' }}>
+              <div className="metric-stat-sub" style={{ color: 'var(--text-secondary)' }}>
                 {openCrashesCount} open issues ({crashes.length} tracked total)
               </div>
             </>

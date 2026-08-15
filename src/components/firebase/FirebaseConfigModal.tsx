@@ -247,7 +247,7 @@ export const FirebaseConfigModal: React.FC<FirebaseConfigModalProps> = ({
           </div>
 
           {/* Quick Paste JSON */}
-          <div style={{ marginBottom: '20px', background: 'rgba(0,0,0,0.2)', padding: '14px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
+          <div style={{ marginBottom: '20px', background: 'var(--bg-surface)', padding: '14px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
             <label className="form-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <span>Paste Firebase Web SDK Config Snippet</span>
               <button
@@ -326,10 +326,11 @@ export const FirebaseConfigModal: React.FC<FirebaseConfigModalProps> = ({
                 marginTop: '16px',
                 padding: '12px 14px',
                 borderRadius: 'var(--radius-sm)',
-                background: testResult.success ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
-                border: `1px solid ${testResult.success ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`,
+                background: testResult.success ? 'var(--status-success-bg)' : 'var(--status-danger-bg)',
+                border: `1px solid ${testResult.success ? 'var(--status-success-border)' : 'var(--status-danger-border)'}`,
                 fontSize: '0.825rem',
-                color: testResult.success ? '#6ee7b7' : '#fca5a5',
+                color: testResult.success ? 'var(--status-success)' : 'var(--status-danger)',
+                fontWeight: 600,
               }}
             >
               <strong>{testResult.success ? '✓ Connection Verified:' : '✗ Connection Notice:'}</strong> {testResult.message}
@@ -337,14 +338,14 @@ export const FirebaseConfigModal: React.FC<FirebaseConfigModalProps> = ({
           )}
 
           {/* Firestore Schema Guide */}
-          <div style={{ marginTop: '20px', padding: '12px 14px', background: 'var(--bg-surface)', borderRadius: 'var(--radius-sm)', borderLeft: '3px solid #3b82f6', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+          <div style={{ marginTop: '20px', padding: '12px 14px', background: 'var(--bg-surface)', borderRadius: 'var(--radius-sm)', borderLeft: '3px solid var(--accent-primary)', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
             <strong style={{ color: 'var(--text-primary)' }}>Firestore `USERS` Collection Schema:</strong>
             <div style={{ marginTop: '4px' }}>
-              Documents inside <code style={{ color: '#93c5fd' }}>/USERS/{'{userId}'}</code> support:
+              Documents inside <code style={{ color: 'var(--accent-primary)', fontWeight: 600 }}>/USERS/{'{userId}'}</code> support:
               <ul style={{ paddingLeft: '18px', marginTop: '4px' }}>
                 <li><code>firstName</code>, <code>lastName</code>, <code>name</code>, <code>email</code>, <code>phone</code> (or <code>phoneNumber</code>)</li>
                 <li><code>is_premium</code> (0 or 1), <code>isVerified</code> (boolean), <code>pinCode</code></li>
-                <li><strong style={{ color: '#fcd34d' }}><code>expire_date</code></strong> (YYYY-MM-DD or Firestore Timestamp), <strong style={{ color: '#93c5fd' }}><code>messageRemaining</code></strong> (number)</li>
+                <li><strong style={{ color: 'var(--role-marketing)' }}><code>expire_date</code></strong> (YYYY-MM-DD or Firestore Timestamp), <strong style={{ color: 'var(--accent-primary)' }}><code>messageRemaining</code></strong> (number)</li>
               </ul>
             </div>
           </div>

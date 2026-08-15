@@ -265,9 +265,9 @@ export const AdminManagementView: React.FC = () => {
             <thead>
               <tr>
                 <th style={{ textAlign: 'left' }}>Capability & Granular Claim</th>
-                <th style={{ textAlign: 'center', color: '#c4b5fd' }}>Super Admin</th>
-                <th style={{ textAlign: 'center', color: '#7dd3fc' }}>App / Product Manager</th>
-                <th style={{ textAlign: 'center', color: '#fcd34d' }}>Marketing Admin</th>
+                <th style={{ textAlign: 'center', color: 'var(--role-super)', fontWeight: 600 }}>Super Admin</th>
+                <th style={{ textAlign: 'center', color: 'var(--role-manager)', fontWeight: 600 }}>App / Product Manager</th>
+                <th style={{ textAlign: 'center', color: 'var(--role-marketing)', fontWeight: 600 }}>Marketing Admin</th>
               </tr>
             </thead>
             <tbody>

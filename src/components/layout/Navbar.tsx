@@ -61,8 +61,8 @@ export const Navbar: React.FC = () => {
                 width: '8px',
                 height: '8px',
                 borderRadius: '50%',
-                backgroundColor: isSuperAdmin ? '#a855f7' : '#38bdf8',
-                boxShadow: '0 0 8px currentColor',
+                backgroundColor: isSuperAdmin ? 'var(--role-super)' : 'var(--role-manager)',
+                boxShadow: '0 0 6px currentColor',
               }}
             />
             <span className="simulator-label">Active Admin:</span>
@@ -199,7 +199,7 @@ export const Navbar: React.FC = () => {
                             {isSelected && <UserCheck size={14} style={{ color: 'var(--status-success)', flexShrink: 0 }} />}
                           </div>
                           <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <span style={{ color: rDef.colorScheme === 'purple' ? '#c4b5fd' : rDef.colorScheme === 'blue' ? '#7dd3fc' : '#fcd34d' }}>
+                            <span style={{ color: rDef.colorScheme === 'purple' ? 'var(--role-super)' : rDef.colorScheme === 'blue' ? 'var(--role-manager)' : 'var(--role-marketing)', fontWeight: 600 }}>
                               {admin.isSuperAdmin ? 'Super Admin' : 'Staff Admin (ADMINS)'}
                             </span>
                           </div>
@@ -243,7 +243,7 @@ export const Navbar: React.FC = () => {
                       padding: '8px 12px',
                       background: 'transparent',
                       border: 'none',
-                      color: '#f87171',
+                      color: 'var(--status-danger)',
                       fontSize: '0.8rem',
                       fontWeight: 500,
                       cursor: 'pointer',

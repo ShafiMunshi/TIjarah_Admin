@@ -151,7 +151,7 @@ export const AuditLogsView: React.FC = () => {
                       </td>
 
                       <td>
-                        <span style={{ fontSize: '0.8rem', fontFamily: 'var(--font-mono)', color: '#93c5fd' }}>
+                        <span style={{ fontSize: '0.8rem', fontFamily: 'var(--font-mono)', color: 'var(--accent-primary)', fontWeight: 600 }}>
                           {log.targetResource.name || log.targetResource.id}
                         </span>
                       </td>
@@ -184,14 +184,14 @@ export const AuditLogsView: React.FC = () => {
                     {/* Diff Row */}
                     {isExpanded && log.changes && (
                       <tr>
-                        <td colSpan={role === 'super_admin' ? 7 : 6} style={{ background: '#070b14', padding: '16px 20px' }}>
+                        <td colSpan={role === 'super_admin' ? 7 : 6} style={{ background: 'var(--bg-surface)', padding: '16px 20px', borderBottom: '1px solid var(--border-subtle)' }}>
                           <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '8px', textTransform: 'uppercase' }}>
                             Payload Changes (Before / After Diff):
                           </div>
                           <div style={{ display: 'grid', gridTemplateColumns: log.changes.before ? '1fr 1fr' : '1fr', gap: '16px' }}>
                             {log.changes.before && (
                               <div>
-                                <div style={{ fontSize: '0.72rem', color: '#fca5a5', marginBottom: '4px' }}>Before:</div>
+                                <div style={{ fontSize: '0.72rem', color: 'var(--status-danger)', fontWeight: 600, marginBottom: '4px' }}>Before:</div>
                                 <pre className="code-block" style={{ fontSize: '0.75rem' }}>
                                   {JSON.stringify(log.changes.before, null, 2)}
                                 </pre>
@@ -199,7 +199,7 @@ export const AuditLogsView: React.FC = () => {
                             )}
                             {log.changes.after && (
                               <div>
-                                <div style={{ fontSize: '0.72rem', color: '#86efac', marginBottom: '4px' }}>After:</div>
+                                <div style={{ fontSize: '0.72rem', color: 'var(--status-success)', fontWeight: 600, marginBottom: '4px' }}>After:</div>
                                 <pre className="code-block" style={{ fontSize: '0.75rem' }}>
                                   {JSON.stringify(log.changes.after, null, 2)}
                                 </pre>

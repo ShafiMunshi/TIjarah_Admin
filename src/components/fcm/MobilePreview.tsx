@@ -80,13 +80,13 @@ export const MobilePreview: React.FC<MobilePreviewProps> = ({
           )}
 
           {deepLink && (
-            <div style={{ fontSize: '0.68rem', color: '#93c5fd', fontFamily: 'var(--font-mono)', marginTop: '2px' }}>
+            <div style={{ fontSize: '0.68rem', color: '#60a5fa', fontFamily: 'var(--font-mono)', marginTop: '2px' }}>
               🔗 {deepLink}
             </div>
           )}
         </div>
 
-        <div style={{ marginTop: 'auto', textAlign: 'center', fontSize: '0.7rem', color: '#71717a' }}>
+        <div style={{ marginTop: 'auto', textAlign: 'center', fontSize: '0.7rem', color: '#94a3b8' }}>
           Swipe up to open app
         </div>
       </div>

@@ -282,7 +282,7 @@ exports.setAdminRole = functions.https.onCall(async (data, context) => {
                 {simResult.reason}
               </div>
 
-              <div style={{ marginTop: '10px', fontSize: '0.78rem', fontFamily: 'var(--font-mono)', color: '#93c5fd' }}>
+              <div style={{ marginTop: '10px', fontSize: '0.78rem', fontFamily: 'var(--font-mono)', color: 'var(--accent-primary)', fontWeight: 600 }}>
                 Rule Match: <code>{simResult.ruleMatched}</code>
               </div>
             </div>

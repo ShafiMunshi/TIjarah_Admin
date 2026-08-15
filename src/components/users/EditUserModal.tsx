@@ -227,7 +227,7 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <MessageSquare size={18} style={{ color: 'var(--accent-primary)' }} />
                   <span style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                    Message Credits & Quota (<code style={{ color: '#93c5fd' }}>messageRemaining</code>)
+                    Message Credits & Quota (<code style={{ color: 'var(--accent-primary)', fontWeight: 600 }}>messageRemaining</code>)
                   </span>
                 </div>
                 <span className="badge badge-manager">SMS / Messaging</span>
@@ -278,7 +278,7 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
                     type="button"
                     className="btn btn-outline btn-sm"
                     onClick={() => setMessageRemaining(0)}
-                    style={{ color: '#f87171' }}
+                    style={{ color: 'var(--status-danger)' }}
                   >
                     Reset (0)
                   </button>
@@ -300,7 +300,7 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <Crown size={18} style={{ color: '#f59e0b' }} />
                   <span style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                    Membership (<code style={{ color: '#93c5fd' }}>is_premium</code>) & Expiry (<code style={{ color: '#93c5fd' }}>expire_date</code>)
+                    Membership (<code style={{ color: 'var(--accent-primary)', fontWeight: 600 }}>is_premium</code>) & Expiry (<code style={{ color: 'var(--accent-primary)', fontWeight: 600 }}>expire_date</code>)
                   </span>
                 </div>
                 <span className={`badge ${isPremium === 1 ? 'badge-super' : 'badge-neutral'}`}>
@@ -378,7 +378,7 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
                       type="button"
                       className="btn btn-secondary btn-sm"
                       onClick={() => setExpireDate('')}
-                      style={{ padding: '4px 8px', fontSize: '0.75rem', color: '#93c5fd' }}
+                      style={{ padding: '4px 8px', fontSize: '0.75rem', color: 'var(--text-secondary)' }}
                     >
                       Clear Date
                     </button>

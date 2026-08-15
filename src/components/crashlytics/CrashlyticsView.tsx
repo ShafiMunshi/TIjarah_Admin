@@ -251,7 +251,7 @@ export const CrashlyticsView: React.FC = () => {
               {isExpanded && (
                 <div style={{ marginTop: '16px', borderTop: '1px solid var(--border-subtle)', paddingTop: '16px' }}>
                   {issue.rootCauseNotes && (
-                    <div style={{ background: 'var(--bg-surface)', padding: '10px 14px', borderRadius: 'var(--radius-sm)', marginBottom: '12px', fontSize: '0.825rem', color: '#93c5fd' }}>
+                    <div style={{ background: 'var(--bg-surface)', padding: '10px 14px', borderRadius: 'var(--radius-sm)', marginBottom: '12px', fontSize: '0.825rem', color: 'var(--accent-primary)', borderLeft: '3px solid var(--accent-primary)' }}>
                       <strong>Root Cause Note:</strong> {issue.rootCauseNotes}
                     </div>
                   )}
@@ -271,7 +271,7 @@ export const CrashlyticsView: React.FC = () => {
 
                   <div className="stack-trace-container">
                     {issue.stackTrace.map((line, idx) => (
-                      <div key={idx} style={{ color: idx === 0 ? '#fca5a5' : '#cbd5e1' }}>
+                      <div key={idx} style={{ color: idx === 0 ? '#b91c1c' : '#475569', fontWeight: idx === 0 ? 600 : 400 }}>
                         {line}
                       </div>
                     ))}

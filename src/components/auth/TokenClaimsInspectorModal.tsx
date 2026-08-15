@@ -114,7 +114,7 @@ export const TokenClaimsInspectorModal: React.FC<TokenClaimsInspectorModalProps>
           </button>
         </div>
 
-        <div style={{ padding: '0 24px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', gap: '16px', background: 'rgba(0,0,0,0.1)' }}>
+        <div style={{ padding: '0 24px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', gap: '16px', background: 'var(--bg-surface)' }}>
           <button
             onClick={() => setActiveTab('claims_view')}
             className={`btn btn-sm ${activeTab === 'claims_view' ? 'btn-primary' : 'btn-outline'}`}
@@ -176,7 +176,7 @@ export const TokenClaimsInspectorModal: React.FC<TokenClaimsInspectorModalProps>
               </pre>
 
               <div style={{ marginTop: '16px', padding: '12px 14px', background: 'var(--bg-surface)', borderRadius: 'var(--radius-sm)', borderLeft: '3px solid var(--accent-primary)', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                <strong>Firestore Security Rule Context:</strong> Inside security rules, these claims are accessed via <code style={{ color: '#93c5fd' }}>request.auth.token.role</code> and <code style={{ color: '#93c5fd' }}>request.auth.token.permissions</code>.
+                <strong>Firestore Security Rule Context:</strong> Inside security rules, these claims are accessed via <code style={{ color: 'var(--accent-primary)', fontWeight: 600 }}>request.auth.token.role</code> and <code style={{ color: 'var(--accent-primary)', fontWeight: 600 }}>request.auth.token.permissions</code>.
               </div>
             </div>
           ) : (
@@ -196,7 +196,7 @@ export const TokenClaimsInspectorModal: React.FC<TokenClaimsInspectorModalProps>
                         alignItems: 'center',
                         justifyContent: 'space-between',
                         padding: '10px 14px',
-                        background: isChecked ? 'rgba(59, 130, 246, 0.08)' : 'var(--bg-surface)',
+                        background: isChecked ? 'var(--accent-primary-subtle)' : 'var(--bg-secondary)',
                         border: `1px solid ${isChecked ? 'var(--accent-primary)' : 'var(--border-subtle)'}`,
                         borderRadius: 'var(--radius-sm)',
                         cursor: 'pointer',

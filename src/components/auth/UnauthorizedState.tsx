@@ -82,11 +82,11 @@ export const UnauthorizedState: React.FC<UnauthorizedStateProps> = ({
               >
                 <span>{def.displayName.split(' ')[0]}</span>
                 {qualifies ? (
-                  <span style={{ fontSize: '0.68rem', color: '#86efac', display: 'flex', alignItems: 'center', gap: '2px' }}>
+                  <span style={{ fontSize: '0.68rem', color: 'var(--status-success)', display: 'flex', alignItems: 'center', gap: '2px', fontWeight: 600 }}>
                     <Check size={12} /> Granted
                   </span>
                 ) : (
-                  <span style={{ fontSize: '0.68rem', color: '#fca5a5' }}>Restricted</span>
+                  <span style={{ fontSize: '0.68rem', color: 'var(--status-danger)', fontWeight: 600 }}>Restricted</span>
                 )}
               </button>
             );

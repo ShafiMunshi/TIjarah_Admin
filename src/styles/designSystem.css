@@ -1,61 +1,61 @@
 /* ==========================================================================
-   TIJARAH ADMIN CONSOLE - DESIGN SYSTEM (VANILLA CSS TOKENS & UTILITIES)
+   TIJARAH ADMIN CONSOLE - DESIGN SYSTEM (LIGHT MODE VANILLA CSS)
    ========================================================================== */
 
 :root {
-  /* Color Palette - Refined Slate, Deep Indigo & Accents */
-  --bg-primary: #0b0f17;
-  --bg-secondary: #111827;
-  --bg-surface: #172033;
-  --bg-surface-hover: #1e293b;
-  --bg-surface-active: #243248;
-  --bg-subtle: rgba(255, 255, 255, 0.03);
-  --bg-subtle-hover: rgba(255, 255, 255, 0.06);
+  /* Color Palette - Crisp Modern Slate & Refined Accents */
+  --bg-primary: #f8fafc;
+  --bg-secondary: #ffffff;
+  --bg-surface: #f1f5f9;
+  --bg-surface-hover: #e2e8f0;
+  --bg-surface-active: #cbd5e1;
+  --bg-subtle: rgba(0, 0, 0, 0.02);
+  --bg-subtle-hover: rgba(0, 0, 0, 0.04);
 
-  --border-subtle: rgba(255, 255, 255, 0.07);
-  --border-medium: rgba(255, 255, 255, 0.14);
-  --border-strong: rgba(255, 255, 255, 0.25);
+  --border-subtle: #e2e8f0;
+  --border-medium: #cbd5e1;
+  --border-strong: #94a3b8;
 
-  --text-primary: #f8fafc;
-  --text-secondary: #94a3b8;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
   --text-muted: #64748b;
-  --text-inverse: #0f172a;
+  --text-inverse: #ffffff;
 
   /* Brand Accents */
-  --accent-primary: #3b82f6;
-  --accent-primary-hover: #2563eb;
-  --accent-primary-subtle: rgba(59, 130, 246, 0.12);
-  --accent-border: rgba(59, 130, 246, 0.3);
+  --accent-primary: #2563eb;
+  --accent-primary-hover: #1d4ed8;
+  --accent-primary-subtle: rgba(37, 99, 235, 0.08);
+  --accent-border: rgba(37, 99, 235, 0.25);
 
   /* Role Badges & Context Colors */
-  --role-super: #8b5cf6;
-  --role-super-bg: rgba(139, 92, 246, 0.14);
-  --role-super-border: rgba(139, 92, 246, 0.35);
+  --role-super: #7c3aed;
+  --role-super-bg: rgba(124, 58, 237, 0.08);
+  --role-super-border: rgba(124, 58, 237, 0.25);
 
   --role-manager: #0284c7;
-  --role-manager-bg: rgba(2, 132, 199, 0.14);
-  --role-manager-border: rgba(2, 132, 199, 0.35);
+  --role-manager-bg: rgba(2, 132, 199, 0.08);
+  --role-manager-border: rgba(2, 132, 199, 0.25);
 
   --role-marketing: #d97706;
-  --role-marketing-bg: rgba(217, 119, 6, 0.14);
-  --role-marketing-border: rgba(217, 119, 6, 0.35);
+  --role-marketing-bg: rgba(217, 119, 6, 0.08);
+  --role-marketing-border: rgba(217, 119, 6, 0.25);
 
   /* Status Colors */
-  --status-success: #10b981;
-  --status-success-bg: rgba(16, 185, 129, 0.12);
-  --status-success-border: rgba(16, 185, 129, 0.3);
+  --status-success: #16a34a;
+  --status-success-bg: rgba(22, 163, 74, 0.08);
+  --status-success-border: rgba(22, 163, 74, 0.25);
 
-  --status-warning: #f59e0b;
-  --status-warning-bg: rgba(245, 158, 11, 0.12);
-  --status-warning-border: rgba(245, 158, 11, 0.3);
+  --status-warning: #d97706;
+  --status-warning-bg: rgba(217, 119, 6, 0.08);
+  --status-warning-border: rgba(217, 119, 6, 0.25);
 
-  --status-danger: #ef4444;
-  --status-danger-bg: rgba(239, 68, 68, 0.12);
-  --status-danger-border: rgba(239, 68, 68, 0.3);
+  --status-danger: #dc2626;
+  --status-danger-bg: rgba(220, 38, 38, 0.08);
+  --status-danger-border: rgba(220, 38, 38, 0.25);
 
-  --status-info: #06b6d4;
-  --status-info-bg: rgba(6, 182, 212, 0.12);
-  --status-info-border: rgba(6, 182, 212, 0.3);
+  --status-info: #0891b2;
+  --status-info-bg: rgba(8, 145, 178, 0.08);
+  --status-info-border: rgba(8, 145, 178, 0.25);
 
   /* Dimensions & Spacing */
   --sidebar-width: 260px;
@@ -69,13 +69,13 @@
   --radius-full: 9999px;
 
   /* Shadows */
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 12px -1px rgba(0, 0, 0, 0.4), 0 2px 6px -2px rgba(0, 0, 0, 0.3);
-  --shadow-lg: 0 12px 28px -4px rgba(0, 0, 0, 0.5), 0 4px 12px -3px rgba(0, 0, 0, 0.4);
-  --shadow-dropdown: 0 16px 36px rgba(0, 0, 0, 0.6), 0 0 0 1px var(--border-medium);
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.06), 0 2px 4px -2px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 10px 25px -3px rgba(0, 0, 0, 0.08), 0 4px 10px -4px rgba(0, 0, 0, 0.04);
+  --shadow-dropdown: 0 10px 25px rgba(0, 0, 0, 0.08), 0 0 0 1px var(--border-subtle);
 
   /* Typography */
-  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --font-mono: 'JetBrains Mono', 'Fira Code', Menlo, Consolas, Monaco, monospace;
 
   /* Transitions */
@@ -234,12 +234,12 @@ a:hover {
 }
 
 .btn-secondary {
-  background-color: var(--bg-surface);
+  background-color: #ffffff;
   color: var(--text-primary);
   border-color: var(--border-medium);
 }
 .btn-secondary:hover:not(:disabled) {
-  background-color: var(--bg-surface-hover);
+  background-color: var(--bg-surface);
   border-color: var(--border-strong);
 }
 
@@ -249,7 +249,7 @@ a:hover {
   border-color: var(--border-medium);
 }
 .btn-outline:hover:not(:disabled) {
-  background-color: var(--bg-subtle-hover);
+  background-color: var(--bg-surface);
   border-color: var(--border-strong);
 }
 
@@ -296,42 +296,42 @@ a:hover {
 
 .badge-super {
   background-color: var(--role-super-bg);
-  color: #c4b5fd;
+  color: #6d28d9;
   border: 1px solid var(--role-super-border);
 }
 
 .badge-manager {
   background-color: var(--role-manager-bg);
-  color: #7dd3fc;
+  color: #0369a1;
   border: 1px solid var(--role-manager-border);
 }
 
 .badge-marketing {
   background-color: var(--role-marketing-bg);
-  color: #fcd34d;
+  color: #b45309;
   border: 1px solid var(--role-marketing-border);
 }
 
 .badge-success {
   background-color: var(--status-success-bg);
-  color: #6ee7b7;
+  color: #15803d;
   border: 1px solid var(--status-success-border);
 }
 
 .badge-warning {
   background-color: var(--status-warning-bg);
-  color: #fde047;
+  color: #b45309;
   border: 1px solid var(--status-warning-border);
 }
 
 .badge-danger {
   background-color: var(--status-danger-bg);
-  color: #fca5a5;
+  color: #b91c1c;
   border: 1px solid var(--status-danger-border);
 }
 
 .badge-neutral {
-  background-color: rgba(255, 255, 255, 0.08);
+  background-color: #f1f5f9;
   color: var(--text-secondary);
   border: 1px solid var(--border-subtle);
 }
@@ -356,8 +356,8 @@ a:hover {
   font-family: inherit;
   font-size: 0.875rem;
   color: var(--text-primary);
-  background-color: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
+  background-color: #ffffff;
+  border: 1px solid var(--border-medium);
   border-radius: var(--radius-sm);
   outline: none;
   transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
@@ -365,7 +365,7 @@ a:hover {
 
 .form-input:focus, .form-select:focus, .form-textarea:focus {
   border-color: var(--accent-primary);
-  box-shadow: 0 0 0 2px var(--accent-primary-subtle);
+  box-shadow: 0 0 0 3px var(--accent-primary-subtle);
 }
 
 .form-textarea {
@@ -395,7 +395,7 @@ a:hover {
 
 .data-table th {
   padding: 12px 16px;
-  background-color: rgba(0, 0, 0, 0.2);
+  background-color: #f8fafc;
   color: var(--text-secondary);
   font-weight: 600;
   font-size: 0.775rem;
@@ -417,7 +417,7 @@ a:hover {
 }
 
 .data-table tbody tr:hover {
-  background-color: var(--bg-subtle-hover);
+  background-color: #f8fafc;
 }
 
 .data-table tbody tr:last-child td {
@@ -428,7 +428,7 @@ a:hover {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background-color: rgba(0, 0, 0, 0.75);
+  background-color: rgba(15, 23, 42, 0.45);
   backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
@@ -440,7 +440,7 @@ a:hover {
 
 .modal-content {
   background-color: var(--bg-secondary);
-  border: 1px solid var(--border-medium);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
   max-width: 620px;
@@ -461,6 +461,7 @@ a:hover {
 .modal-title {
   font-size: 1.15rem;
   font-weight: 600;
+  color: var(--text-primary);
 }
 
 .modal-body {
@@ -474,7 +475,7 @@ a:hover {
   align-items: center;
   justify-content: flex-end;
   gap: 12px;
-  background-color: rgba(0, 0, 0, 0.15);
+  background-color: #f8fafc;
 }
 
 /* Toast Notifications */
@@ -497,7 +498,7 @@ a:hover {
   align-items: flex-start;
   gap: 12px;
   padding: 14px 16px;
-  background-color: var(--bg-secondary);
+  background-color: #ffffff;
   border: 1px solid var(--border-medium);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-lg);
@@ -542,11 +543,11 @@ a:hover {
 .code-block {
   font-family: var(--font-mono);
   font-size: 0.8125rem;
-  background-color: #050811;
-  border: 1px solid var(--border-subtle);
+  background-color: #f8fafc;
+  border: 1px solid var(--border-medium);
   border-radius: var(--radius-sm);
   padding: 16px;
-  color: #e2e8f0;
+  color: #0f172a;
   overflow-x: auto;
   line-height: 1.6;
 }
@@ -578,10 +579,10 @@ a:hover {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--border-strong);
+  background: #cbd5e1;
   border-radius: var(--radius-full);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--text-muted);
+  background: #94a3b8;
 }

@@ -276,7 +276,7 @@ export const UserManagementView: React.FC = () => {
 
       return (
         <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <span style={{ fontSize: '0.8rem', color: diffDays < 30 ? '#fcd34d' : 'var(--text-primary)', fontWeight: 500 }}>
+          <span style={{ fontSize: '0.8rem', color: diffDays < 30 ? 'var(--status-warning)' : 'var(--text-primary)', fontWeight: 500 }}>
             {rawDate}
           </span>
           <span style={{ fontSize: '0.7rem', color: diffDays < 30 ? 'var(--status-warning)' : 'var(--text-muted)' }}>
@@ -307,7 +307,7 @@ export const UserManagementView: React.FC = () => {
             </span>
           </div>
           <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
-            Synchronized with <code style={{ color: '#93c5fd' }}>{connectedCollection}</code> collection. Filter by name, email, created range, and premium tier. Manage <code style={{ color: '#93c5fd' }}>messageRemaining</code> and <code style={{ color: '#93c5fd' }}>expire_date</code>.
+            Synchronized with <code style={{ color: 'var(--accent-primary)', fontWeight: 600 }}>{connectedCollection}</code> collection. Filter by name, email, created range, and premium tier. Manage <code style={{ color: 'var(--accent-primary)', fontWeight: 600 }}>messageRemaining</code> and <code style={{ color: 'var(--accent-primary)', fontWeight: 600 }}>expire_date</code>.
           </p>
         </div>
 
@@ -335,8 +335,8 @@ export const UserManagementView: React.FC = () => {
       {firestoreError && (
         <div
           style={{
-            background: 'rgba(239, 68, 68, 0.1)',
-            border: '1px solid rgba(239, 68, 68, 0.3)',
+            background: 'var(--status-danger-bg)',
+            border: '1px solid var(--status-danger-border)',
             borderRadius: 'var(--radius-md)',
             padding: '12px 16px',
             marginBottom: '16px',
@@ -348,9 +348,9 @@ export const UserManagementView: React.FC = () => {
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <XCircle size={18} style={{ color: '#ef4444', flexShrink: 0 }} />
+            <XCircle size={18} style={{ color: 'var(--status-danger)', flexShrink: 0 }} />
             <div>
-              <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#fca5a5' }}>
+              <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--status-danger)' }}>
                 Firestore Connection Notice
               </div>
               <div style={{ fontSize: '0.775rem', color: 'var(--text-secondary)' }}>

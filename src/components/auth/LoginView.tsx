@@ -80,7 +80,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
         backgroundColor: 'var(--bg-primary)',
         padding: '24px',
         position: 'relative',
-        background: 'radial-gradient(ellipse at top, rgba(30, 41, 59, 0.45) 0%, rgba(11, 15, 23, 1) 75%)',
+        background: 'radial-gradient(ellipse at top, #e2e8f0 0%, #f8fafc 80%)',
       }}
     >
       <div
@@ -88,7 +88,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
           width: '100%',
           maxWidth: '440px',
           backgroundColor: 'var(--bg-secondary)',
-          border: '1px solid var(--border-medium)',
+          border: '1px solid var(--border-subtle)',
           borderRadius: 'var(--radius-lg)',
           boxShadow: 'var(--shadow-lg)',
           overflow: 'hidden',
@@ -100,7 +100,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
             padding: '30px 32px 22px',
             textAlign: 'center',
             borderBottom: '1px solid var(--border-subtle)',
-            background: 'linear-gradient(180deg, rgba(255,255,255,0.02) 0%, transparent 100%)',
+            background: 'var(--bg-surface)',
           }}
         >
           <div
@@ -108,7 +108,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
               width: '48px',
               height: '48px',
               margin: '0 auto 14px',
-              background: 'linear-gradient(135deg, #3b82f6, #6366f1)',
+              background: 'linear-gradient(135deg, #2563eb, #4f46e5)',
               borderRadius: 'var(--radius-md)',
               display: 'flex',
               alignItems: 'center',
@@ -116,7 +116,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
               color: '#ffffff',
               fontWeight: 800,
               fontSize: '1.4rem',
-              boxShadow: '0 4px 14px rgba(59, 130, 246, 0.4)',
+              boxShadow: '0 4px 14px rgba(37, 99, 235, 0.3)',
             }}
           >
             T
@@ -136,12 +136,12 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
               alignItems: 'center',
               gap: '8px',
               padding: '6px 14px',
-              background: 'var(--bg-surface)',
+              background: 'var(--bg-secondary)',
               border: '1px solid var(--border-subtle)',
               borderRadius: 'var(--radius-full)',
             }}
           >
-            <Flame size={14} style={{ color: '#f59e0b' }} />
+            <Flame size={14} style={{ color: '#d97706' }} />
             <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
               Target: <strong style={{ color: 'var(--text-primary)' }}>{storedConfig?.projectId || 'Production'}</strong>
             </span>
@@ -154,16 +154,16 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
             style={{
               margin: '18px 24px 0',
               padding: '12px 14px',
-              background: 'rgba(239, 68, 68, 0.12)',
-              border: '1px solid rgba(239, 68, 68, 0.35)',
+              background: 'var(--status-danger-bg)',
+              border: '1px solid var(--status-danger-border)',
               borderRadius: 'var(--radius-sm)',
               display: 'flex',
               alignItems: 'flex-start',
               gap: '10px',
             }}
           >
-            <AlertCircle size={17} style={{ color: '#ef4444', flexShrink: 0, marginTop: '2px' }} />
-            <div style={{ fontSize: '0.8rem', color: '#fca5a5', lineHeight: 1.4 }}>
+            <AlertCircle size={17} style={{ color: 'var(--status-danger)', flexShrink: 0, marginTop: '2px' }} />
+            <div style={{ fontSize: '0.8rem', color: 'var(--status-danger)', lineHeight: 1.4 }}>
               <strong>Authentication Notice:</strong> {authError}
             </div>
           </div>
@@ -235,12 +235,12 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
         <div
           style={{
             padding: '16px 28px 20px',
-            background: 'rgba(0, 0, 0, 0.22)',
+            background: 'var(--bg-surface)',
             borderTop: '1px solid var(--border-subtle)',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', marginBottom: '14px' }}>
-            <Shield size={14} style={{ color: '#38bdf8', marginTop: '2px', flexShrink: 0 }} />
+            <Shield size={14} style={{ color: 'var(--accent-primary)', marginTop: '2px', flexShrink: 0 }} />
             <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0, lineHeight: 1.4 }}>
               Public registration is disabled. Administrator accounts and role permissions can only be created by an authorized <strong>Super Admin</strong>.
             </p>
@@ -254,7 +254,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
             style={{ width: '100%', justifyContent: 'center', gap: '8px', padding: '8px 12px' }}
             title="Sign in with an anonymous Firebase Auth token (passes Firestore request.auth != null rule)"
           >
-            <Zap size={14} style={{ color: '#f59e0b' }} />
+            <Zap size={14} style={{ color: '#d97706' }} />
             <span>Sign In Anonymously (Quick Rules Check)</span>
           </button>
         </div>
