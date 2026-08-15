@@ -1,14 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ShieldCheck,
   UserPlus,
   Check,
   X,
   Edit,
+  Database,
 } from 'lucide-react';
 import type { AdminUser, AdminRole, Permission } from '../../types/auth';
 import { ROLE_DEFINITIONS } from '../../types/auth';
 import { useAuth } from '../../context/AuthContext';
+import { firestoreService } from '../../services/firestoreService';
 import { mockService } from '../../services/mockService';
 import { useToast } from '../../context/ToastContext';
 
@@ -17,6 +19,7 @@ export const AdminManagementView: React.FC = () => {
   const { showSuccess, showError } = useToast();
 
   const [admins, setAdmins] = useState<AdminUser[]>(() => mockService.getAdmins());
+  const [isLive, setIsLive] = useState(false);
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [selectedAdminForEdit, setSelectedAdminForEdit] = useState<AdminUser | null>(null);
 
@@ -30,17 +33,35 @@ export const AdminManagementView: React.FC = () => {
   const [editRole, setEditRole] = useState<AdminRole>('app_manager');
   const [editPermissions, setEditPermissions] = useState<Permission[]>([]);
 
+  useEffect(() => {
+    firestoreService.getAdmins().then((res) => {
+      if (res.admins && res.admins.length > 0) {
+        setAdmins(res.admins);
+        setIsLive(res.isLive);
+      }
+    });
+
+    const unsubscribe = firestoreService.subscribeToAdmins((updatedAdmins) => {
+      setAdmins(updatedAdmins);
+      setIsLive(true);
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, []);
+
   const handleOpenEdit = (admin: AdminUser) => {
     setSelectedAdminForEdit(admin);
     setEditRole(admin.role);
     setEditPermissions(admin.customClaims.permissions || ROLE_DEFINITIONS[admin.role].permissions);
   };
 
-  const handleSaveRoleAndClaims = () => {
+  const handleSaveRoleAndClaims = async () => {
     if (!selectedAdminForEdit) return;
 
     try {
-      mockService.updateAdminRoleAndClaims(
+      await firestoreService.updateAdminRoleAndClaims(
         selectedAdminForEdit.uid,
         editRole,
         editPermissions,
@@ -52,11 +73,11 @@ export const AdminManagementView: React.FC = () => {
         }
       );
 
-      const latest = mockService.getAdmins();
-      setAdmins(latest);
+      const latest = await firestoreService.getAdmins();
+      setAdmins(latest.admins);
       refreshAdminsList();
       showSuccess(
-        'Admin Role & Claims Committed',
+        'Admin Role & Claims Committed to Firestore',
         `Updated ${selectedAdminForEdit.displayName} to ${ROLE_DEFINITIONS[editRole].displayName}`
       );
       setSelectedAdminForEdit(null);
@@ -65,7 +86,7 @@ export const AdminManagementView: React.FC = () => {
     }
   };
 
-  const handleInviteAdmin = (e: React.FormEvent) => {
+  const handleInviteAdmin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inviteEmail.trim() || !inviteName.trim()) {
       showError('Incomplete fields', 'Email and Name are required');
@@ -73,7 +94,7 @@ export const AdminManagementView: React.FC = () => {
     }
 
     try {
-      mockService.createAdmin(
+      await firestoreService.createAdmin(
         inviteEmail.trim(),
         inviteName.trim(),
         inviteRole,
@@ -86,10 +107,10 @@ export const AdminManagementView: React.FC = () => {
         }
       );
 
-      const latest = mockService.getAdmins();
-      setAdmins(latest);
+      const latest = await firestoreService.getAdmins();
+      setAdmins(latest.admins);
       refreshAdminsList();
-      showSuccess('Admin Invited Successfully', `Created ${inviteRole} claim for ${inviteEmail}`);
+      showSuccess('Admin Added to ADMINS Collection', `Created ${inviteRole} claim for ${inviteEmail}`);
       setIsInviteModalOpen(false);
       setInviteEmail('');
       setInviteName('');
@@ -122,9 +143,12 @@ export const AdminManagementView: React.FC = () => {
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
             <h1 style={{ fontSize: '1.5rem', fontWeight: 700 }}>Admin Role-Based Access Control (RBAC)</h1>
-            <span className="badge badge-super">Super Admin Governance</span>
+            <span className={`badge ${isLive ? 'badge-success' : 'badge-neutral'}`} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+              <Database size={12} />
+              <span>{isLive ? `Live Firestore: ADMINS (${admins.length} accounts)` : 'Local Cache'}</span>
+            </span>
           </div>
           <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
             Manage staff clearance levels, grant custom token claims, and audit role definitions

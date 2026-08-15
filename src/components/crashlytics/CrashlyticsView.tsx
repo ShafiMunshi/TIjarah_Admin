@@ -1,37 +1,57 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Bug,
   Copy,
   Check,
   ChevronDown,
   ChevronUp,
+  Database,
 } from 'lucide-react';
 import type { CrashIssue, CrashStatus } from '../../types/crashlytics';
-import { INITIAL_CRASH_METRICS } from '../../services/mockData';
+import { INITIAL_CRASH_METRICS, INITIAL_CRASH_ISSUES } from '../../services/mockData';
 import { useAuth } from '../../context/AuthContext';
-import { mockService } from '../../services/mockService';
+import { firestoreService } from '../../services/firestoreService';
 import { useToast } from '../../context/ToastContext';
 
 export const CrashlyticsView: React.FC = () => {
   const { currentAdmin, role, hasPermission } = useAuth();
   const { showSuccess, showError } = useToast();
 
-  const [issues, setIssues] = useState<CrashIssue[]>(() => mockService.getCrashIssues());
+  const [issues, setIssues] = useState<CrashIssue[]>(() => INITIAL_CRASH_ISSUES);
+  const [isLive, setIsLive] = useState(false);
   const [expandedIssueId, setExpandedIssueId] = useState<string | null>(issues[0]?.id || null);
   const [copiedTraceId, setCopiedTraceId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<'all' | CrashStatus>('all');
 
   const canManageIssues = hasPermission('crashlytics:manage_issues');
 
+  useEffect(() => {
+    firestoreService.getCrashIssues().then((res) => {
+      if (res.issues && res.issues.length > 0) {
+        setIssues(res.issues);
+        setIsLive(res.isLive);
+      }
+    });
+
+    const unsubscribe = firestoreService.subscribeToCrashIssues((updatedIssues) => {
+      setIssues(updatedIssues);
+      setIsLive(true);
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, []);
+
   const filteredIssues = issues.filter((i) => statusFilter === 'all' || i.status === statusFilter);
 
-  const handleUpdateStatus = (issueId: string, newStatus: CrashStatus) => {
+  const handleUpdateStatus = async (issueId: string, newStatus: CrashStatus) => {
     if (!canManageIssues) {
       showError('Permission Denied', 'Your custom claims do not permit updating crash issue statuses');
       return;
     }
     try {
-      mockService.updateCrashStatus(
+      await firestoreService.updateCrashStatus(
         issueId,
         newStatus,
         undefined,
@@ -42,8 +62,9 @@ export const CrashlyticsView: React.FC = () => {
           role: role,
         }
       );
-      setIssues(mockService.getCrashIssues());
-      showSuccess('Issue Status Updated', `Crash issue marked as ${newStatus}`);
+      const latest = await firestoreService.getCrashIssues();
+      setIssues(latest.issues);
+      showSuccess('Issue Status Updated in Firestore', `Crash issue marked as ${newStatus}`);
     } catch (err: any) {
       showError('Update failed', err.message);
     }
@@ -60,9 +81,12 @@ export const CrashlyticsView: React.FC = () => {
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
             <h1 style={{ fontSize: '1.5rem', fontWeight: 700 }}>Firebase Crashlytics & App Health</h1>
-            <span className="badge badge-manager">Operational Diagnostics</span>
+            <span className={`badge ${isLive ? 'badge-success' : 'badge-neutral'}`} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+              <Database size={12} />
+              <span>{isLive ? `Live Firestore: CRASH_ISSUES (${issues.length} tracked)` : 'Local Cache'}</span>
+            </span>
           </div>
           <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
             Real-time native crash reports, ANRs, stack trace debugging, and regression monitoring

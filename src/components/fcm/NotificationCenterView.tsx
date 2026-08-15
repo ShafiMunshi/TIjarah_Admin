@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Send,
   Clock,
@@ -7,11 +7,12 @@ import {
   Crown,
   TrendingUp,
   Shield,
+  Database,
 } from 'lucide-react';
 import type { TargetAudience, NotificationPriority, NotificationCampaign } from '../../types/notifications';
-import { AUDIENCE_SEGMENTS } from '../../services/mockData';
+import { AUDIENCE_SEGMENTS, INITIAL_CAMPAIGNS } from '../../services/mockData';
 import { useAuth } from '../../context/AuthContext';
-import { mockService } from '../../services/mockService';
+import { firestoreService } from '../../services/firestoreService';
 import { useToast } from '../../context/ToastContext';
 import { MobilePreview } from './MobilePreview';
 
@@ -19,7 +20,8 @@ export const NotificationCenterView: React.FC = () => {
   const { currentAdmin, role, hasPermission } = useAuth();
   const { showSuccess, showError } = useToast();
 
-  const [campaigns, setCampaigns] = useState<NotificationCampaign[]>(() => mockService.getCampaigns());
+  const [campaigns, setCampaigns] = useState<NotificationCampaign[]>(() => INITIAL_CAMPAIGNS);
+  const [isLive, setIsLive] = useState(false);
   const [activeTab, setActiveTab] = useState<'composer' | 'history'>('composer');
 
   // Form State
@@ -39,7 +41,25 @@ export const NotificationCenterView: React.FC = () => {
 
   const activeSegmentDef = AUDIENCE_SEGMENTS.find((s) => s.id === selectedAudience) || AUDIENCE_SEGMENTS[0];
 
-  const handleSendBroadcast = (e: React.FormEvent) => {
+  useEffect(() => {
+    firestoreService.getCampaigns().then((res) => {
+      if (res.campaigns && res.campaigns.length > 0) {
+        setCampaigns(res.campaigns);
+        setIsLive(res.isLive);
+      }
+    });
+
+    const unsubscribe = firestoreService.subscribeToCampaigns((updatedCampaigns) => {
+      setCampaigns(updatedCampaigns);
+      setIsLive(true);
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, []);
+
+  const handleSendBroadcast = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!canBroadcast && !canCompose) {
@@ -55,7 +75,7 @@ export const NotificationCenterView: React.FC = () => {
     setIsSending(true);
 
     try {
-      mockService.createCampaign(
+      await firestoreService.createCampaign(
         {
           title,
           body,
@@ -76,9 +96,10 @@ export const NotificationCenterView: React.FC = () => {
         }
       );
 
-      setCampaigns(mockService.getCampaigns());
+      const latest = await firestoreService.getCampaigns();
+      setCampaigns(latest.campaigns);
       showSuccess(
-        scheduleLater ? 'Notification Scheduled' : 'FCM Push Broadcast Dispatched!',
+        scheduleLater ? 'Notification Scheduled in Firestore' : 'FCM Push Broadcast Dispatched & Saved in CAMPAIGNS Collection!',
         `Targeted ${activeSegmentDef.estimatedCount.toLocaleString()} active mobile tokens`
       );
 
@@ -99,9 +120,12 @@ export const NotificationCenterView: React.FC = () => {
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
             <h1 style={{ fontSize: '1.5rem', fontWeight: 700 }}>FCM Push Notification Center</h1>
-            <span className="badge badge-marketing">Targeted Audience Dispatch</span>
+            <span className={`badge ${isLive ? 'badge-success' : 'badge-neutral'}`} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+              <Database size={12} />
+              <span>{isLive ? `Live Firestore: CAMPAIGNS (${campaigns.length} campaigns)` : 'Local Cache'}</span>
+            </span>
           </div>
           <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
             Compose and broadcast high-priority push campaigns to iOS APNs and Android FCM tokens without exposing individual PII

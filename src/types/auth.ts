@@ -3,8 +3,10 @@ export type AdminRole = 'super_admin' | 'app_manager' | 'marketing_admin';
 export type Permission =
   // User Management Permissions
   | 'users:view'
+  | 'users:view_email'
   | 'users:edit'
   | 'users:manage_subscription'
+  | 'users:edit_messages'
   | 'users:delete'
   | 'users:export'
   
@@ -28,6 +30,24 @@ export type Permission =
   | 'audit:view_limited'
   | 'settings:manage';
 
+export interface FirestoreAdminPermissions {
+  sendNotifications: boolean;
+  userEdit: boolean;
+  userEmailView: boolean;
+  userView: boolean;
+  [key: string]: boolean | undefined;
+}
+
+export interface FirestoreAdminDoc {
+  uid: string;
+  email: string;
+  isSuperAdmin: boolean;
+  permissions: FirestoreAdminPermissions;
+  displayName?: string;
+  createdAt?: any;
+  updatedAt?: any;
+}
+
 export interface RoleDefinition {
   id: AdminRole;
   displayName: string;
@@ -47,8 +67,10 @@ export const ROLE_DEFINITIONS: Record<AdminRole, RoleDefinition> = {
     description: 'Unrestricted access to all admin console features, user management, financial KPIs, marketing broadcasts, and role delegation.',
     permissions: [
       'users:view',
+      'users:view_email',
       'users:edit',
       'users:manage_subscription',
+      'users:edit_messages',
       'users:delete',
       'users:export',
       'fcm:compose',
@@ -72,11 +94,13 @@ export const ROLE_DEFINITIONS: Record<AdminRole, RoleDefinition> = {
     displayName: 'App Manager / Product Manager',
     badgeLabel: 'User & App Operations',
     colorScheme: 'blue',
-    description: 'Inspect and manage user profiles, upgrade premium subscriptions, monitor Crashlytics & app health. Restricted from marketing broadcasts and financial revenue.',
+    description: 'Inspect and manage user profiles, upgrade premium subscriptions, edit message quotas, monitor Crashlytics & app health.',
     permissions: [
       'users:view',
+      'users:view_email',
       'users:edit',
       'users:manage_subscription',
+      'users:edit_messages',
       'crashlytics:view',
       'crashlytics:manage_issues',
       'analytics:app_health',
@@ -103,7 +127,9 @@ export const ROLE_DEFINITIONS: Record<AdminRole, RoleDefinition> = {
 
 export interface DecodedCustomClaims {
   role: AdminRole;
+  isSuperAdmin?: boolean;
   permissions?: Permission[];
+  firestorePermissions?: FirestoreAdminPermissions;
   adminSince?: string;
   department?: string;
   securityClearance?: 'tier_1' | 'tier_2' | 'tier_3';
@@ -116,6 +142,8 @@ export interface AdminUser {
   displayName: string;
   avatarUrl: string;
   role: AdminRole;
+  isSuperAdmin: boolean;
+  firestorePermissions: FirestoreAdminPermissions;
   customClaims: DecodedCustomClaims;
   status: 'active' | 'suspended';
   lastLogin: string;

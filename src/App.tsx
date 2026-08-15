@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { AuthProvider } from './context/AuthContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
 import { Navbar } from './components/layout/Navbar';
 import type { NavView } from './components/layout/Sidebar';
 import { Sidebar } from './components/layout/Sidebar';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
+import { LoginView } from './components/auth/LoginView';
 
 // Views
 import { DashboardView } from './components/dashboard/DashboardView';
@@ -15,8 +16,13 @@ import { AdminManagementView } from './components/admins/AdminManagementView';
 import { AuditLogsView } from './components/audit/AuditLogsView';
 import { SecurityArchitectureView } from './components/security/SecurityArchitectureView';
 
-const MainApp: React.FC = () => {
-  const [currentView, setCurrentView] = useState<NavView>('dashboard');
+const AuthenticatedApp: React.FC = () => {
+  const { isAuthenticated } = useAuth();
+  const [currentView, setCurrentView] = useState<NavView>('users');
+
+  if (!isAuthenticated) {
+    return <LoginView />;
+  }
 
   return (
     <div className="app-container">
@@ -32,7 +38,7 @@ const MainApp: React.FC = () => {
             <ProtectedRoute
               requiredRoles={['super_admin', 'app_manager']}
               requiredPermissions={['users:view']}
-              featureName="User Management & Customer Data"
+              featureName="USERS Collection & Customer Data"
               onNavigateHome={() => setCurrentView('dashboard')}
             >
               <UserManagementView />
@@ -93,7 +99,7 @@ export function App() {
   return (
     <AuthProvider>
       <ToastProvider>
-        <MainApp />
+        <AuthenticatedApp />
       </ToastProvider>
     </AuthProvider>
   );

@@ -39,6 +39,8 @@ export const FirebaseConfigModal: React.FC<FirebaseConfigModalProps> = ({
   const [rawJson, setRawJson] = useState('');
   const [isSeeding, setIsSeeding] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
+  const [isTesting, setIsTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ success: boolean; message: string; count?: number } | null>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -80,7 +82,7 @@ export const FirebaseConfigModal: React.FC<FirebaseConfigModalProps> = ({
       } else {
         showError('Invalid Config JSON', 'JSON must include at least apiKey and projectId');
       }
-    } catch (e: any) {
+    } catch {
       showError('Parse Error', 'Could not parse JSON format. Please verify standard key-value pairs.');
     }
   };
@@ -118,11 +120,48 @@ export const FirebaseConfigModal: React.FC<FirebaseConfigModalProps> = ({
     if (onConfigChanged) onConfigChanged();
   };
 
+  const handleTestConnection = async () => {
+    setIsTesting(true);
+    setTestResult(null);
+    try {
+      if (!config.apiKey || !config.projectId) {
+        throw new Error('API Key and Project ID are required before testing.');
+      }
+      initFirebase(config);
+      const res = await firestoreService.getUsers();
+      if (res.isLiveFirestore) {
+        setTestResult({
+          success: true,
+          message: `Successfully connected to Firestore! Found ${res.totalDocs} documents in "${res.collectionName}" collection.`,
+          count: res.totalDocs,
+        });
+        showSuccess('Firestore Connected!', `Found ${res.totalDocs} documents in ${res.collectionName}`);
+      } else {
+        setTestResult({
+          success: false,
+          message: res.error || 'Could not connect to Firestore collection.',
+        });
+        showError('Connection Notice', res.error || 'Failed to fetch from Firestore');
+      }
+    } catch (err: any) {
+      setTestResult({
+        success: false,
+        message: err.message || 'Firestore connection error',
+      });
+      showError('Connection Error', err.message);
+    } finally {
+      setIsTesting(false);
+    }
+  };
+
   const handleSeedFirestore = async () => {
     setIsSeeding(true);
     try {
-      const result = await firestoreService.seedFirestoreWithInitialUsers();
-      showSuccess('Firestore Populated!', `Created ${result.count} user documents in collection "users"`);
+      const result = await firestoreService.seedAllFirestoreCollections();
+      showSuccess(
+        'Firestore Collections Populated!',
+        `Synced: ${result.users} Users, ${result.admins} Admins, ${result.campaigns} Campaigns, ${result.crashes} Crash Issues, ${result.audit} Audit Logs`
+      );
       if (onConfigChanged) onConfigChanged();
     } catch (err: any) {
       showError('Seed Failed', err.message);
@@ -280,28 +319,57 @@ export const FirebaseConfigModal: React.FC<FirebaseConfigModalProps> = ({
             </div>
           </div>
 
+          {/* Test Connection Feedback */}
+          {testResult && (
+            <div
+              style={{
+                marginTop: '16px',
+                padding: '12px 14px',
+                borderRadius: 'var(--radius-sm)',
+                background: testResult.success ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                border: `1px solid ${testResult.success ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`,
+                fontSize: '0.825rem',
+                color: testResult.success ? '#6ee7b7' : '#fca5a5',
+              }}
+            >
+              <strong>{testResult.success ? '✓ Connection Verified:' : '✗ Connection Notice:'}</strong> {testResult.message}
+            </div>
+          )}
+
           {/* Firestore Schema Guide */}
           <div style={{ marginTop: '20px', padding: '12px 14px', background: 'var(--bg-surface)', borderRadius: 'var(--radius-sm)', borderLeft: '3px solid #3b82f6', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-            <strong style={{ color: 'var(--text-primary)' }}>Firestore `users` Collection Schema:</strong>
+            <strong style={{ color: 'var(--text-primary)' }}>Firestore `USERS` Collection Schema:</strong>
             <div style={{ marginTop: '4px' }}>
-              Documents inside <code style={{ color: '#93c5fd' }}>/users/{'{userId}'}</code> can contain fields:
+              Documents inside <code style={{ color: '#93c5fd' }}>/USERS/{'{userId}'}</code> support:
               <ul style={{ paddingLeft: '18px', marginTop: '4px' }}>
-                <li><code>name</code> (string), <code>email</code> (string), <code>phoneNumber</code> (string)</li>
-                <li><code>tier</code> ('free' | 'pro' | 'enterprise')</li>
-                <li><strong style={{ color: '#fcd34d' }}><code>expireAt</code> or <code>tierExpiresAt</code></strong> (Firestore Timestamp or ISO Date)</li>
-                <li><code>status</code> ('active' | 'suspended' | 'pending')</li>
+                <li><code>firstName</code>, <code>lastName</code>, <code>name</code>, <code>email</code>, <code>phone</code> (or <code>phoneNumber</code>)</li>
+                <li><code>is_premium</code> (0 or 1), <code>isVerified</code> (boolean), <code>pinCode</code></li>
+                <li><strong style={{ color: '#fcd34d' }}><code>expire_date</code></strong> (YYYY-MM-DD or Firestore Timestamp), <strong style={{ color: '#93c5fd' }}><code>messageRemaining</code></strong> (number)</li>
               </ul>
             </div>
           </div>
         </div>
 
-        <div className="modal-footer">
-          <button type="button" className="btn btn-secondary" onClick={onClose}>
-            Cancel
+        <div className="modal-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <button
+            type="button"
+            className="btn btn-outline"
+            onClick={handleTestConnection}
+            disabled={isTesting}
+            style={{ fontSize: '0.8rem' }}
+          >
+            <Flame size={14} style={{ color: '#f59e0b' }} />
+            <span>{isTesting ? 'Testing USERS Query...' : 'Test USERS Connection'}</span>
           </button>
-          <button type="button" className="btn btn-primary" onClick={handleSaveAndConnect}>
-            <Check size={16} /> Save & Connect Live Database
-          </button>
+
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button type="button" className="btn btn-secondary" onClick={onClose}>
+              Cancel
+            </button>
+            <button type="button" className="btn btn-primary" onClick={handleSaveAndConnect}>
+              <Check size={16} /> Save & Connect Live Database
+            </button>
+          </div>
         </div>
       </div>
     </div>

@@ -6,6 +6,7 @@ import {
   UserCheck,
   Sparkles,
   Flame,
+  LogOut,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { ROLE_DEFINITIONS } from '../../types/auth';
@@ -15,7 +16,7 @@ import { TokenClaimsInspectorModal } from '../auth/TokenClaimsInspectorModal';
 import { FirebaseConfigModal } from '../firebase/FirebaseConfigModal';
 
 export const Navbar: React.FC = () => {
-  const { currentAdmin, role, allAdmins, switchAdmin, refreshClaims, isRefreshingClaims } = useAuth();
+  const { currentAdmin, isSuperAdmin, allAdmins, switchAdmin, refreshClaims, isRefreshingClaims, logout } = useAuth();
   const { showSuccess, showInfo } = useToast();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isClaimsModalOpen, setIsClaimsModalOpen] = useState(false);
@@ -24,7 +25,6 @@ export const Navbar: React.FC = () => {
 
   const isLiveFirebase = isFirebaseConfigured();
   const storedConfig = getStoredFirebaseConfig();
-  const currentRoleDef = role !== 'unauthorized' ? ROLE_DEFINITIONS[role] : null;
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -50,6 +50,11 @@ export const Navbar: React.FC = () => {
     showInfo('Custom Claims token re-verified with auth authority');
   };
 
+  const handleLogout = () => {
+    logout();
+    showInfo('Logged out', 'You have been signed out of the admin console');
+  };
+
   return (
     <>
       <header className="app-navbar">
@@ -60,18 +65,17 @@ export const Navbar: React.FC = () => {
                 width: '8px',
                 height: '8px',
                 borderRadius: '50%',
-                backgroundColor: role === 'super_admin' ? '#a855f7' : role === 'app_manager' ? '#38bdf8' : '#fbbf24',
+                backgroundColor: isSuperAdmin ? '#a855f7' : '#38bdf8',
                 boxShadow: '0 0 8px currentColor',
               }}
             />
-            <span className="simulator-label">Active RBAC Profile:</span>
-            {currentRoleDef ? (
-              <span className={`badge badge-${role === 'super_admin' ? 'super' : role === 'app_manager' ? 'manager' : 'marketing'}`}>
-                {currentRoleDef.displayName}
-              </span>
-            ) : (
-              <span className="badge badge-danger">Unauthenticated</span>
-            )}
+            <span className="simulator-label">Active Admin:</span>
+            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+              {currentAdmin?.email || 'test@admin.com'}
+            </span>
+            <span className={`badge ${isSuperAdmin ? 'badge-super' : 'badge-manager'}`}>
+              {isSuperAdmin ? 'Super Admin' : 'Staff Admin'}
+            </span>
           </div>
         </div>
 
@@ -104,7 +108,7 @@ export const Navbar: React.FC = () => {
             className="btn btn-outline btn-sm btn-icon-only"
             onClick={handleManualRefresh}
             disabled={isRefreshingClaims}
-            title="Simulate getIdTokenResult(true) force refresh"
+            title="Simulate token refresh with ADMINS collection"
           >
             <RefreshCw size={15} className={isRefreshingClaims ? 'spin-anim' : ''} />
           </button>
@@ -117,13 +121,13 @@ export const Navbar: React.FC = () => {
               aria-expanded={isDropdownOpen}
             >
               <img
-                src={currentAdmin?.avatarUrl || 'https://api.dicebear.com/7.x/avataaars/svg?seed=guest'}
+                src={currentAdmin?.avatarUrl || 'https://api.dicebear.com/7.x/avataaars/svg?seed=admin'}
                 alt={currentAdmin?.displayName || 'Admin'}
                 className="admin-avatar"
               />
               <div className="admin-info-inline">
-                <span className="admin-name-inline">{currentAdmin?.displayName || 'Guest Admin'}</span>
-                <span className="admin-role-inline">{currentRoleDef?.displayName.split(' ')[0] || 'Unauthorized'}</span>
+                <span className="admin-name-inline">{currentAdmin?.displayName || currentAdmin?.email || 'Admin'}</span>
+                <span className="admin-role-inline">{isSuperAdmin ? 'Super Admin' : 'Staff Admin'}</span>
               </div>
               <ChevronDown size={14} style={{ color: 'var(--text-muted)', marginLeft: '4px' }} />
             </button>
@@ -146,7 +150,7 @@ export const Navbar: React.FC = () => {
               >
                 <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--border-subtle)', marginBottom: '6px' }}>
                   <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                    Switch Admin Persona (RBAC Test)
+                    ADMINS Collection Accounts
                   </div>
                 </div>
 
@@ -185,7 +189,7 @@ export const Navbar: React.FC = () => {
                           </div>
                           <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
                             <span style={{ color: rDef.colorScheme === 'purple' ? '#c4b5fd' : rDef.colorScheme === 'blue' ? '#7dd3fc' : '#fcd34d' }}>
-                              {rDef.displayName}
+                              {admin.isSuperAdmin ? 'Super Admin' : 'Staff Admin (ADMINS)'}
                             </span>
                           </div>
                         </div>
@@ -194,7 +198,7 @@ export const Navbar: React.FC = () => {
                   })}
                 </div>
 
-                <div style={{ borderTop: '1px solid var(--border-subtle)', marginTop: '8px', paddingTop: '6px' }}>
+                <div style={{ borderTop: '1px solid var(--border-subtle)', marginTop: '8px', paddingTop: '6px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
                   <button
                     onClick={() => {
                       setIsDropdownOpen(false);
@@ -216,6 +220,26 @@ export const Navbar: React.FC = () => {
                     }}
                   >
                     <Sparkles size={14} /> Open Custom Claims Sandbox
+                  </button>
+
+                  <button
+                    onClick={handleLogout}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      width: '100%',
+                      padding: '8px 12px',
+                      background: 'transparent',
+                      border: 'none',
+                      color: '#f87171',
+                      fontSize: '0.8rem',
+                      fontWeight: 500,
+                      cursor: 'pointer',
+                      borderRadius: 'var(--radius-xs)',
+                    }}
+                  >
+                    <LogOut size={14} /> Sign Out (Lock Console)
                   </button>
                 </div>
               </div>

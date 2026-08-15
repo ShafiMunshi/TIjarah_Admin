@@ -1,19 +1,40 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Search,
   ChevronDown,
   ChevronUp,
+  Database,
 } from 'lucide-react';
 import type { AuditLogEntry } from '../../types/audit';
+import { INITIAL_AUDIT_LOGS } from '../../services/mockData';
 import { useAuth } from '../../context/AuthContext';
-import { mockService } from '../../services/mockService';
+import { firestoreService } from '../../services/firestoreService';
 
 export const AuditLogsView: React.FC = () => {
   const { role } = useAuth();
-  const [logs] = useState<AuditLogEntry[]>(() => mockService.getAuditLogs());
+  const [logs, setLogs] = useState<AuditLogEntry[]>(() => INITIAL_AUDIT_LOGS);
+  const [isLive, setIsLive] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [actionFilter, setActionFilter] = useState<string>('all');
   const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
+
+  useEffect(() => {
+    firestoreService.getAuditLogs().then((res) => {
+      if (res.logs && res.logs.length > 0) {
+        setLogs(res.logs);
+        setIsLive(res.isLive);
+      }
+    });
+
+    const unsubscribe = firestoreService.subscribeToAuditLogs((updatedLogs) => {
+      setLogs(updatedLogs);
+      setIsLive(true);
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, []);
 
   const filteredLogs = logs.filter((log) => {
     const matchesSearch =
@@ -29,9 +50,12 @@ export const AuditLogsView: React.FC = () => {
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
             <h1 style={{ fontSize: '1.5rem', fontWeight: 700 }}>Security Audit Trail</h1>
-            <span className="badge badge-super">Immutable Event Journal</span>
+            <span className={`badge ${isLive ? 'badge-success' : 'badge-neutral'}`} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+              <Database size={12} />
+              <span>{isLive ? `Live Firestore: AUDIT_LOGS (${logs.length} entries)` : 'Local Cache'}</span>
+            </span>
           </div>
           <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
             Comprehensive log of all administrative actions, subscription changes, broadcasts, and role updates

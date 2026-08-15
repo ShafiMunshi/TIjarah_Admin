@@ -3,16 +3,31 @@ export type AccountStatus = 'active' | 'pending' | 'suspended' | 'flagged';
 
 export interface AppUser {
   id: string;
-  name: string;
+  // Exact Firestore fields from 'USERS' collection
+  firstName: string;
+  lastName: string;
+  name: string; // computed helper (firstName + lastName)
   email: string;
-  phoneNumber: string;
+  phone: string;
+  phoneNumber?: string; // alias
   avatarUrl: string;
-  tier: SubscriptionTier;
-  // Supports both ISO string or Timestamp representation
-  tierExpiresAt: string | null;
-  expireAt?: string | null; // Firestore field alias
-  expiresAt?: string | null; // Firestore field alias
-  autoRenew: boolean;
+  
+  // Premium & Subscription
+  is_premium: number; // 1 = premium, 0 = free
+  tier: SubscriptionTier; // mapped helper
+  expire_date: string; // exact Firestore field e.g. "2027-11-12"
+  tierExpiresAt: string | null; // normalized ISO string
+  expireAt?: string | null;
+  expiresAt?: string | null;
+  autoRenew?: boolean;
+  
+  // Quotas & Verification
+  messageRemaining: number; // exact Firestore field
+  pinCode?: string; // exact Firestore field
+  isVerified: boolean; // exact Firestore field
+  role: number; // exact Firestore field (e.g. 0)
+  
+  // Secondary metadata
   status: AccountStatus;
   joinedAt: string;
   lastActiveAt: string;
@@ -28,19 +43,10 @@ export interface AppUser {
 
 export interface UserFilters {
   searchQuery: string;
-  tier: 'all' | SubscriptionTier;
+  tier: 'all' | 'premium' | 'free';
   status: 'all' | AccountStatus;
-  sortBy: 'joinedAt' | 'lastActiveAt' | 'totalSpent' | 'name' | 'tierExpiresAt';
+  sortBy: 'joinedAt' | 'lastActiveAt' | 'messageRemaining' | 'name' | 'expire_date';
   sortOrder: 'asc' | 'desc';
   page: number;
   perPage: number;
-}
-
-export interface UserStats {
-  totalUsers: number;
-  activeProUsers: number;
-  activeEnterpriseUsers: number;
-  freeUsers: number;
-  suspendedUsers: number;
-  churnRatePct: number;
 }

@@ -137,8 +137,16 @@ class MockService {
       displayName,
       avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(displayName)}`,
       role,
+      isSuperAdmin: role === 'super_admin',
+      firestorePermissions: {
+        sendNotifications: role === 'super_admin' || role === 'marketing_admin',
+        userEdit: role === 'super_admin' || role === 'app_manager',
+        userEmailView: role === 'super_admin' || role === 'app_manager',
+        userView: role !== 'marketing_admin',
+      },
       customClaims: {
         role,
+        isSuperAdmin: role === 'super_admin',
         permissions: [...roleDef.permissions],
         department,
         securityClearance: role === 'super_admin' ? 'tier_1' : role === 'app_manager' ? 'tier_2' : 'tier_3',
