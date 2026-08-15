@@ -13,7 +13,6 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { getStoredFirebaseConfig } from '../../services/firebaseClient';
-import { FirebaseConfigModal } from '../firebase/FirebaseConfigModal';
 
 interface LoginViewProps {
   onLoginSuccess?: () => void;
@@ -28,7 +27,6 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
-  const [isFirebaseModalOpen, setIsFirebaseModalOpen] = useState(false);
 
   const storedConfig = getStoredFirebaseConfig();
 
@@ -130,7 +128,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
             Administrator Access Only
           </p>
 
-          {/* Firebase Connection Status Banner */}
+          {/* Safe Firestore Project Indicator */}
           <div
             style={{
               marginTop: '14px',
@@ -141,14 +139,11 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
               background: 'var(--bg-surface)',
               border: '1px solid var(--border-subtle)',
               borderRadius: 'var(--radius-full)',
-              cursor: 'pointer',
             }}
-            onClick={() => setIsFirebaseModalOpen(true)}
-            title="Click to view or edit Firebase configuration"
           >
             <Flame size={14} style={{ color: '#f59e0b' }} />
             <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-              Project: <strong style={{ color: 'var(--text-primary)' }}>{storedConfig?.projectId || 'Not Configured'}</strong>
+              Target: <strong style={{ color: 'var(--text-primary)' }}>{storedConfig?.projectId || 'Production'}</strong>
             </span>
           </div>
         </div>
@@ -264,11 +259,6 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
           </button>
         </div>
       </div>
-
-      <FirebaseConfigModal
-        isOpen={isFirebaseModalOpen}
-        onClose={() => setIsFirebaseModalOpen(false)}
-      />
     </div>
   );
 };

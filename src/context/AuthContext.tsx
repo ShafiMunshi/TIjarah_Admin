@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import type { AdminUser, AdminRole, Permission, DecodedCustomClaims } from '../types/auth';
 import { ROLE_DEFINITIONS } from '../types/auth';
-import { mockService } from '../services/mockService';
 import { firestoreService } from '../services/firestoreService';
 
 interface AuthContextType {
@@ -33,7 +32,7 @@ const ACTIVE_ADMIN_KEY = 'tijarah_active_admin_uid_v2';
 const AUTHENTICATED_SESSION_KEY = 'tijarah_auth_session_v2';
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [adminsList, setAdminsList] = useState<AdminUser[]>(() => mockService.getAdmins());
+  const [adminsList, setAdminsList] = useState<AdminUser[]>([]);
   const [currentAdmin, setCurrentAdmin] = useState<AdminUser | null>(() => {
     try {
       const savedUser = localStorage.getItem(AUTHENTICATED_SESSION_KEY);
@@ -53,6 +52,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Synchronize with Firebase Auth state
   useEffect(() => {
+    firestoreService.getAdmins().then((res) => {
+      setAdminsList(res.admins);
+    });
+
     const unsubscribe = firestoreService.listenToAuthState((admin) => {
       if (admin) {
         setCurrentAdmin(admin);
@@ -66,15 +69,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const refreshAdminsList = () => {
-    const latest = mockService.getAdmins();
-    setAdminsList(latest);
-    if (currentAdmin) {
-      const updated = latest.find((a) => a.uid === currentAdmin.uid);
-      if (updated) {
-        setCurrentAdmin(updated);
-        localStorage.setItem(AUTHENTICATED_SESSION_KEY, JSON.stringify(updated));
+    firestoreService.getAdmins().then((res) => {
+      setAdminsList(res.admins);
+      if (currentAdmin) {
+        const updated = res.admins.find((a) => a.uid === currentAdmin.uid);
+        if (updated) {
+          setCurrentAdmin(updated);
+          localStorage.setItem(AUTHENTICATED_SESSION_KEY, JSON.stringify(updated));
+        }
       }
-    }
+    });
   };
 
   const loginWithCredentials = async (email: string, password?: string): Promise<AdminUser> => {

@@ -7,7 +7,6 @@ import {
   ChevronRight,
   Download,
   Database,
-  Flame,
   RefreshCw,
   CheckCircle2,
   XCircle,
@@ -25,7 +24,6 @@ import { useAuth } from '../../context/AuthContext';
 import { firestoreService } from '../../services/firestoreService';
 import { useToast } from '../../context/ToastContext';
 import { EditUserModal } from './EditUserModal';
-import { FirebaseConfigModal } from '../firebase/FirebaseConfigModal';
 
 export const UserManagementView: React.FC = () => {
   const { role, hasPermission } = useAuth();
@@ -36,7 +34,6 @@ export const UserManagementView: React.FC = () => {
   const [isLiveFirestore, setIsLiveFirestore] = useState(false);
   const [connectedCollection, setConnectedCollection] = useState('USERS');
   const [firestoreError, setFirestoreError] = useState<string | null>(null);
-  const [isFirebaseModalOpen, setIsFirebaseModalOpen] = useState(false);
 
   // Dedicated Filter & Search States
   const [nameSearch, setNameSearch] = useState('');
@@ -301,9 +298,7 @@ export const UserManagementView: React.FC = () => {
             <h1 style={{ fontSize: '1.5rem', fontWeight: 700 }}>USERS Collection Data Table</h1>
             <span
               className={`badge ${isLiveFirestore ? 'badge-success' : 'badge-neutral'}`}
-              style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
-              onClick={() => setIsFirebaseModalOpen(true)}
-              title="Click to view or edit Firebase configuration"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}
             >
               <Database size={12} />
               <span>
@@ -317,13 +312,6 @@ export const UserManagementView: React.FC = () => {
         </div>
 
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-          <button
-            className="btn btn-secondary btn-sm"
-            onClick={() => setIsFirebaseModalOpen(true)}
-          >
-            <Flame size={15} style={{ color: '#f59e0b' }} /> Firebase Settings
-          </button>
-
           <button
             className="btn btn-outline btn-sm btn-icon-only"
             onClick={loadUsersData}
@@ -370,13 +358,6 @@ export const UserManagementView: React.FC = () => {
               </div>
             </div>
           </div>
-          <button
-            className="btn btn-secondary btn-sm"
-            onClick={() => setIsFirebaseModalOpen(true)}
-            style={{ fontSize: '0.75rem', padding: '4px 10px' }}
-          >
-            <Flame size={13} style={{ color: '#f59e0b' }} /> Check Firebase Keys
-          </button>
         </div>
       )}
 
@@ -785,15 +766,6 @@ export const UserManagementView: React.FC = () => {
         isOpen={!!selectedUserForEdit}
         onClose={() => setSelectedUserForEdit(null)}
         onUserUpdated={() => {
-          loadUsersData();
-        }}
-      />
-
-      {/* Firebase Config Modal */}
-      <FirebaseConfigModal
-        isOpen={isFirebaseModalOpen}
-        onClose={() => setIsFirebaseModalOpen(false)}
-        onConfigChanged={() => {
           loadUsersData();
         }}
       />

@@ -4,15 +4,16 @@ import {
   ChevronDown,
   ChevronUp,
   Database,
+  Loader2,
 } from 'lucide-react';
 import type { AuditLogEntry } from '../../types/audit';
-import { INITIAL_AUDIT_LOGS } from '../../services/mockData';
 import { useAuth } from '../../context/AuthContext';
 import { firestoreService } from '../../services/firestoreService';
 
 export const AuditLogsView: React.FC = () => {
   const { role } = useAuth();
-  const [logs, setLogs] = useState<AuditLogEntry[]>(() => INITIAL_AUDIT_LOGS);
+  const [logs, setLogs] = useState<AuditLogEntry[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [isLive, setIsLive] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [actionFilter, setActionFilter] = useState<string>('all');
@@ -20,15 +21,15 @@ export const AuditLogsView: React.FC = () => {
 
   useEffect(() => {
     firestoreService.getAuditLogs().then((res) => {
-      if (res.logs && res.logs.length > 0) {
-        setLogs(res.logs);
-        setIsLive(res.isLive);
-      }
+      setLogs(res.logs);
+      setIsLive(res.isLive);
+      setIsLoading(false);
     });
 
     const unsubscribe = firestoreService.subscribeToAuditLogs((updatedLogs) => {
       setLogs(updatedLogs);
       setIsLive(true);
+      setIsLoading(false);
     });
 
     return () => {
@@ -110,10 +111,19 @@ export const AuditLogsView: React.FC = () => {
             </tr>
           </thead>
           <tbody>
-            {filteredLogs.length === 0 ? (
+            {isLoading ? (
+              <tr>
+                <td colSpan={7} style={{ textAlign: 'center', padding: '36px', color: 'var(--text-muted)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                    <Loader2 size={18} className="spin" style={{ color: 'var(--accent-primary)' }} />
+                    <span>Loading audit records from Firestore AUDIT_LOGS...</span>
+                  </div>
+                </td>
+              </tr>
+            ) : filteredLogs.length === 0 ? (
               <tr>
                 <td colSpan={7} style={{ textAlign: 'center', padding: '32px', color: 'var(--text-muted)' }}>
-                  No audit trail records matched the criteria.
+                  No audit trail records found in Firestore AUDIT_LOGS collection.
                 </td>
               </tr>
             ) : (

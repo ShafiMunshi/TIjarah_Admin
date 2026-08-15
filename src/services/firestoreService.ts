@@ -26,8 +26,9 @@ import type { NotificationCampaign, TargetAudience, NotificationPriority } from 
 import type { CrashIssue, CrashStatus } from '../types/crashlytics';
 import type { AuditLogEntry, AuditActionType } from '../types/audit';
 import { ROLE_DEFINITIONS } from '../types/auth';
-import { mockService } from './mockService';
 import {
+  INITIAL_USERS,
+  INITIAL_ADMINS,
   INITIAL_CAMPAIGNS,
   INITIAL_CRASH_ISSUES,
   INITIAL_AUDIT_LOGS,
@@ -267,10 +268,10 @@ export class FirestoreService {
     const db = getDb();
     if (!db || !isFirebaseConfigured()) {
       return {
-        users: mockService.getUsers(),
+        users: [],
         isLiveFirestore: false,
-        collectionName: 'USERS (Local Cache)',
-        totalDocs: mockService.getUsers().length,
+        collectionName: 'USERS',
+        totalDocs: 0,
         error: 'Firebase credentials are not configured or database is offline',
       };
     }
@@ -317,7 +318,7 @@ export class FirestoreService {
     } catch (err: any) {
       console.warn('Firestore USERS fetch error:', err);
       return {
-        users: mockService.getUsers(),
+        users: [],
         isLiveFirestore: false,
         collectionName: 'USERS',
         totalDocs: 0,
@@ -332,7 +333,7 @@ export class FirestoreService {
   public async updateUser(
     userId: string,
     updates: Partial<AppUser>,
-    actor: { uid: string; displayName: string; email: string; role: string }
+    actor?: { uid: string; displayName: string; email: string; role: string }
   ): Promise<AppUser> {
     const db = getDb();
 
@@ -340,14 +341,14 @@ export class FirestoreService {
       updatedAt: serverTimestamp(),
     };
 
+    if (updates.name !== undefined) {
+      const parts = updates.name.trim().split(' ');
+      payload.firstName = parts[0] || '';
+      payload.lastName = parts.slice(1).join(' ') || '';
+    }
     if (updates.firstName !== undefined) payload.firstName = updates.firstName;
     if (updates.lastName !== undefined) payload.lastName = updates.lastName;
     if (updates.email !== undefined) payload.email = updates.email;
-    if (updates.phone !== undefined || updates.phoneNumber !== undefined) {
-      const p = updates.phone || updates.phoneNumber;
-      payload.phone = p;
-      payload.phoneNumber = p;
-    }
     if (updates.messageRemaining !== undefined) {
       payload.messageRemaining = Number(updates.messageRemaining);
       payload.messages_remaining = Number(updates.messageRemaining);
@@ -419,7 +420,7 @@ export class FirestoreService {
       }
     }
 
-    return mockService.updateUser(userId, updates, actor);
+    return this.normalizeUserDoc(userId, payload);
   }
 
   /**
@@ -805,7 +806,7 @@ export class FirestoreService {
   public async getAdmins(): Promise<{ admins: AdminUser[]; isLive: boolean }> {
     const db = getDb();
     if (!db || !isFirebaseConfigured()) {
-      return { admins: mockService.getAdmins(), isLive: false };
+      return { admins: [], isLive: false };
     }
 
     try {
@@ -818,7 +819,7 @@ export class FirestoreService {
       }
 
       if (snapshot.empty) {
-        return { admins: mockService.getAdmins(), isLive: true };
+        return { admins: [], isLive: true };
       }
 
       const admins: AdminUser[] = [];
@@ -829,7 +830,7 @@ export class FirestoreService {
       return { admins, isLive: true };
     } catch (err) {
       console.warn('Firestore getAdmins error:', err);
-      return { admins: mockService.getAdmins(), isLive: false };
+      return { admins: [], isLive: false };
     }
   }
 
@@ -848,6 +849,8 @@ export class FirestoreService {
               admins.push(this.mapFirestoreAdminDocToAdminUser(docSnap.id, docSnap.data()));
             });
             onUpdate(admins);
+          } else {
+            onUpdate([]);
           }
         },
         (err) => console.warn('ADMINS onSnapshot error:', err)
@@ -897,18 +900,30 @@ export class FirestoreService {
         const adminRef = doc(db, 'ADMINS', adminId);
         await setDoc(adminRef, newAdminPayload);
 
-        await this.logAudit(
-          'admin_invited',
+        await this.logAudit({
+          action: 'admin_invited',
           actor,
-          { type: 'admin', id: adminId, name: displayName },
-          `Created admin account ${email} with role ${roleDef.displayName}`
-        );
+          targetResource: { type: 'admin', id: adminId, name: displayName },
+          description: `Created admin account ${email} with role ${roleDef.displayName}`,
+        });
       } catch (err) {
         console.warn('Firestore write to ADMINS failed:', err);
       }
     }
 
-    return mockService.createAdmin(email, displayName, role, department, actor);
+    return {
+      uid: adminId,
+      email: email.trim(),
+      displayName: displayName.trim(),
+      avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${adminId}`,
+      role,
+      isSuperAdmin: role === 'super_admin',
+      firestorePermissions: newAdminPayload.permissions,
+      customClaims: newAdminPayload.customClaims,
+      status: 'active',
+      lastLogin: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
+    };
   }
 
   public async updateAdminRoleAndClaims(
@@ -938,18 +953,35 @@ export class FirestoreService {
         const adminRef = doc(db, 'ADMINS', targetUid);
         await setDoc(adminRef, payload, { merge: true });
 
-        await this.logAudit(
-          'admin_role_assigned',
+        await this.logAudit({
+          action: 'admin_role_assigned',
           actor,
-          { type: 'admin', id: targetUid },
-          `Updated admin ${targetUid} permissions & role to ${roleDef.displayName}`
-        );
+          targetResource: { type: 'admin', id: targetUid },
+          description: `Updated admin ${targetUid} permissions & role to ${roleDef.displayName}`,
+        });
       } catch (err) {
         console.warn('Firestore update to ADMINS failed:', err);
       }
     }
 
-    return mockService.updateAdminRoleAndClaims(targetUid, newRole, customPermissions, actor);
+    return {
+      uid: targetUid,
+      email: `${targetUid}@tijarah.app`,
+      displayName: targetUid,
+      avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${targetUid}`,
+      role: newRole,
+      isSuperAdmin: newRole === 'super_admin',
+      firestorePermissions: payload.permissions,
+      customClaims: {
+        role: newRole,
+        isSuperAdmin: newRole === 'super_admin',
+        permissions: customPermissions,
+        department: 'Operations',
+      },
+      status: 'active',
+      lastLogin: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
+    };
   }
 
   // =========================================================================
@@ -1004,7 +1036,7 @@ export class FirestoreService {
   public async getCampaigns(): Promise<{ campaigns: NotificationCampaign[]; isLive: boolean }> {
     const db = getDb();
     if (!db || !isFirebaseConfigured()) {
-      return { campaigns: mockService.getCampaigns(), isLive: false };
+      return { campaigns: [], isLive: false };
     }
 
     try {
@@ -1017,7 +1049,7 @@ export class FirestoreService {
       }
 
       if (snapshot.empty) {
-        return { campaigns: mockService.getCampaigns(), isLive: true };
+        return { campaigns: [], isLive: true };
       }
 
       const campaigns: NotificationCampaign[] = [];
@@ -1028,7 +1060,7 @@ export class FirestoreService {
       return { campaigns, isLive: true };
     } catch (err) {
       console.warn('Firestore getCampaigns error:', err);
-      return { campaigns: mockService.getCampaigns(), isLive: false };
+      return { campaigns: [], isLive: false };
     }
   }
 
@@ -1047,6 +1079,8 @@ export class FirestoreService {
               campaigns.push(this.normalizeCampaignDoc(docSnap.id, docSnap.data()));
             });
             onUpdate(campaigns);
+          } else {
+            onUpdate([]);
           }
         },
         (err) => console.warn('CAMPAIGNS onSnapshot error:', err)
@@ -1099,18 +1133,38 @@ export class FirestoreService {
         const campRef = doc(db, 'CAMPAIGNS', campId);
         await setDoc(campRef, payload);
 
-        await this.logAudit(
-          'fcm_broadcast_dispatched',
-          author,
-          { type: 'campaign', id: campId, name: campaignData.title },
-          `Dispatched FCM notification to ${campaignData.audience} (${estCount.toLocaleString()} devices)`
-        );
+        await this.logAudit({
+          action: 'fcm_broadcast_dispatched',
+          actor: author,
+          targetResource: { type: 'campaign', id: campId, name: campaignData.title },
+          description: `Dispatched FCM notification to ${campaignData.audience} (${estCount.toLocaleString()} devices)`,
+        });
       } catch (err) {
         console.warn('Firestore write to CAMPAIGNS failed:', err);
       }
     }
 
-    return mockService.createCampaign(campaignData, author);
+    return {
+      id: campId,
+      title: campaignData.title,
+      body: campaignData.body,
+      imageUrl: campaignData.imageUrl,
+      deepLink: campaignData.deepLink,
+      audience: campaignData.audience,
+      audienceEstimatedCount: estCount,
+      priority: campaignData.priority,
+      sound: campaignData.sound,
+      status: campaignData.scheduleLater ? 'scheduled' : 'completed',
+      createdAt: new Date().toISOString(),
+      sentAt: campaignData.scheduleLater ? undefined : new Date().toISOString(),
+      scheduledFor: campaignData.scheduledFor,
+      createdBy: {
+        adminId: author.uid,
+        adminName: author.displayName,
+        adminRole: author.role,
+      },
+      metrics: payload.metrics,
+    };
   }
 
   // =========================================================================
@@ -1148,7 +1202,7 @@ export class FirestoreService {
   public async getCrashIssues(): Promise<{ issues: CrashIssue[]; isLive: boolean }> {
     const db = getDb();
     if (!db || !isFirebaseConfigured()) {
-      return { issues: mockService.getCrashIssues(), isLive: false };
+      return { issues: [], isLive: false };
     }
 
     try {
@@ -1161,7 +1215,7 @@ export class FirestoreService {
       }
 
       if (snapshot.empty) {
-        return { issues: mockService.getCrashIssues(), isLive: true };
+        return { issues: [], isLive: true };
       }
 
       const issues: CrashIssue[] = [];
@@ -1172,7 +1226,7 @@ export class FirestoreService {
       return { issues, isLive: true };
     } catch (err) {
       console.warn('Firestore getCrashIssues error:', err);
-      return { issues: mockService.getCrashIssues(), isLive: false };
+      return { issues: [], isLive: false };
     }
   }
 
@@ -1191,6 +1245,8 @@ export class FirestoreService {
               issues.push(this.normalizeCrashDoc(docSnap.id, docSnap.data()));
             });
             onUpdate(issues);
+          } else {
+            onUpdate([]);
           }
         },
         (err) => console.warn('CRASH_ISSUES onSnapshot error:', err)
@@ -1224,18 +1280,32 @@ export class FirestoreService {
         const docRef = doc(db, 'CRASH_ISSUES', issueId);
         await setDoc(docRef, payload, { merge: true });
 
-        await this.logAudit(
-          'crash_issue_status_updated',
+        await this.logAudit({
+          action: 'crash_issue_status_updated',
           actor,
-          { type: 'crash_issue', id: issueId },
-          `Changed crash issue ${issueId} status to "${status}"`
-        );
+          targetResource: { type: 'crash_issue', id: issueId },
+          description: `Changed crash issue ${issueId} status to "${status}"`,
+        });
       } catch (err) {
         console.warn('Firestore write to CRASH_ISSUES failed:', err);
       }
     }
 
-    return mockService.updateCrashStatus(issueId, status, resolutionNotes, actor);
+    return {
+      id: issueId,
+      title: 'Crash Issue',
+      subtitle: '',
+      exceptionType: 'FatalException',
+      severity: 'fatal',
+      status,
+      firstSeen: new Date().toISOString(),
+      lastSeen: new Date().toISOString(),
+      totalEvents: 1,
+      impactedUsersCount: 1,
+      stackTrace: [],
+      affectedVersions: ['2.4.1'],
+      rootCauseNotes: resolutionNotes,
+    };
   }
 
   // =========================================================================
@@ -1275,7 +1345,7 @@ export class FirestoreService {
   public async getAuditLogs(): Promise<{ logs: AuditLogEntry[]; isLive: boolean }> {
     const db = getDb();
     if (!db || !isFirebaseConfigured()) {
-      return { logs: mockService.getAuditLogs(), isLive: false };
+      return { logs: [], isLive: false };
     }
 
     try {
@@ -1288,7 +1358,7 @@ export class FirestoreService {
       }
 
       if (snapshot.empty) {
-        return { logs: mockService.getAuditLogs(), isLive: true };
+        return { logs: [], isLive: true };
       }
 
       const logs: AuditLogEntry[] = [];
@@ -1302,7 +1372,7 @@ export class FirestoreService {
       return { logs, isLive: true };
     } catch (err) {
       console.warn('Firestore getAuditLogs error:', err);
-      return { logs: mockService.getAuditLogs(), isLive: false };
+      return { logs: [], isLive: false };
     }
   }
 
@@ -1322,6 +1392,8 @@ export class FirestoreService {
             });
             logs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
             onUpdate(logs);
+          } else {
+            onUpdate([]);
           }
         },
         (err) => console.warn('AUDIT_LOGS onSnapshot error:', err)
@@ -1331,24 +1403,24 @@ export class FirestoreService {
     }
   }
 
-  public async logAudit(
-    action: AuditActionType,
-    actor: { uid: string; displayName: string; email: string; role: string },
-    target: { type: 'user' | 'campaign' | 'admin' | 'crash_issue' | 'system'; id: string; name?: string },
-    description: string,
-    changes?: { before?: any; after?: any }
-  ): Promise<void> {
+  public async logAudit(params: {
+    action: AuditActionType;
+    actor: { uid: string; displayName: string; email: string; role: string };
+    targetResource: { type: 'user' | 'campaign' | 'admin' | 'crash_issue' | 'system'; id: string; name?: string };
+    description: string;
+    changes?: { before?: any; after?: any };
+  }): Promise<void> {
     const db = getDb();
     const logId = `aud_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
 
     const payload = {
       id: logId,
       timestamp: serverTimestamp(),
-      action,
-      actor,
-      targetResource: target,
-      description,
-      changes: changes || {},
+      action: params.action,
+      actor: params.actor,
+      targetResource: params.targetResource,
+      description: params.description,
+      changes: params.changes || {},
       ipAddress: '192.168.1.100',
     };
 
@@ -1360,8 +1432,6 @@ export class FirestoreService {
         console.warn('Firestore write to AUDIT_LOGS failed:', err);
       }
     }
-
-    mockService.logAudit(action, actor, target, description, changes);
   }
 
   // =========================================================================
@@ -1377,7 +1447,7 @@ export class FirestoreService {
     const batch = writeBatch(db);
 
     // 1. Seed USERS
-    const usersToSeed = mockService.getUsers();
+    const usersToSeed = INITIAL_USERS;
     for (const u of usersToSeed) {
       const ref = doc(db, 'USERS', u.id);
       batch.set(ref, {
@@ -1398,7 +1468,7 @@ export class FirestoreService {
     }
 
     // 2. Seed ADMINS
-    const adminsToSeed = mockService.getAdmins();
+    const adminsToSeed = INITIAL_ADMINS;
     for (const a of adminsToSeed) {
       const ref = doc(db, 'ADMINS', a.uid);
       batch.set(ref, {

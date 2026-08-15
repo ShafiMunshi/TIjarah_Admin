@@ -52,6 +52,59 @@ export interface NotificationCampaign {
   };
 }
 
+export interface AudienceSegmentOption {
+  id: TargetAudience;
+  name: string;
+  label: string;
+  description: string;
+  estimatedCount: number;
+}
+
+export const AUDIENCE_SEGMENTS: AudienceSegmentOption[] = [
+  {
+    id: 'all_users',
+    name: 'All Registered App Users',
+    label: 'All Active Devices',
+    description: 'Broadcast to all registered FCM device tokens in the system',
+    estimatedCount: 142850,
+  },
+  {
+    id: 'pro_subscribers',
+    name: 'Pro Tier Subscribers',
+    label: 'Pro & Growth Tier Users',
+    description: 'Subscribed merchants with active recurring memberships',
+    estimatedCount: 42300,
+  },
+  {
+    id: 'enterprise_accounts',
+    name: 'Enterprise VIP Accounts',
+    label: 'Enterprise Key Accounts',
+    description: 'Large vendor fleets & multi-store retail operators',
+    estimatedCount: 5400,
+  },
+  {
+    id: 'inactive_7_days',
+    name: 'Dormant Accounts (7d+)',
+    label: 'Inactive (7+ Days)',
+    description: 'Re-engagement segment for users dormant over the past week',
+    estimatedCount: 18900,
+  },
+  {
+    id: 'ios_users',
+    name: 'iOS APNs Clients',
+    label: 'Apple iOS Devices (APNs)',
+    description: 'Direct Apple Push Notification service token holders',
+    estimatedCount: 88400,
+  },
+  {
+    id: 'android_users',
+    name: 'Android FCM Clients',
+    label: 'Google Android Devices',
+    description: 'Direct Google Play Services FCM channel devices',
+    estimatedCount: 54450,
+  },
+];
+
 export interface AudienceSegmentDefinition {
   id: TargetAudience;
   name: string;

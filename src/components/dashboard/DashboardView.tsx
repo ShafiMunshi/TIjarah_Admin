@@ -12,7 +12,6 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { ROLE_DEFINITIONS } from '../../types/auth';
-import { INITIAL_CAMPAIGNS, INITIAL_CRASH_ISSUES, INITIAL_AUDIT_LOGS } from '../../services/mockData';
 import { firestoreService } from '../../services/firestoreService';
 import type { AppUser } from '../../types/users';
 import type { NotificationCampaign } from '../../types/notifications';
@@ -29,34 +28,34 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
   const roleDef = role !== 'unauthorized' ? ROLE_DEFINITIONS[role] : null;
 
   const [users, setUsers] = useState<AppUser[]>([]);
-  const [campaigns, setCampaigns] = useState<NotificationCampaign[]>(() => INITIAL_CAMPAIGNS);
-  const [crashes, setCrashes] = useState<CrashIssue[]>(() => INITIAL_CRASH_ISSUES);
-  const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>(() => INITIAL_AUDIT_LOGS);
+  const [campaigns, setCampaigns] = useState<NotificationCampaign[]>([]);
+  const [crashes, setCrashes] = useState<CrashIssue[]>([]);
+  const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
 
   useEffect(() => {
     // 1. Live USERS
     firestoreService.getUsers().then((res) => {
-      if (res.users && res.users.length > 0) setUsers(res.users);
+      setUsers(res.users);
     });
     const unsubUsers = firestoreService.subscribeToUsers((res) => {
-      if (res.isLive && res.users) setUsers(res.users);
+      setUsers(res.users);
     });
 
     // 2. Live CAMPAIGNS
     firestoreService.getCampaigns().then((res) => {
-      if (res.campaigns && res.campaigns.length > 0) setCampaigns(res.campaigns);
+      setCampaigns(res.campaigns);
     });
     const unsubCampaigns = firestoreService.subscribeToCampaigns((list) => setCampaigns(list));
 
     // 3. Live CRASH_ISSUES
     firestoreService.getCrashIssues().then((res) => {
-      if (res.issues && res.issues.length > 0) setCrashes(res.issues);
+      setCrashes(res.issues);
     });
     const unsubCrashes = firestoreService.subscribeToCrashIssues((list) => setCrashes(list));
 
     // 4. Live AUDIT_LOGS
     firestoreService.getAuditLogs().then((res) => {
-      if (res.logs && res.logs.length > 0) setAuditLogs(res.logs);
+      setAuditLogs(res.logs);
     });
     const unsubAudit = firestoreService.subscribeToAuditLogs((list) => setAuditLogs(list));
 
@@ -242,62 +241,74 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
           </div>
 
           {role === 'marketing_admin' ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {campaigns.slice(0, 3).map((camp) => (
-                <div
-                  key={camp.id}
-                  style={{
-                    padding: '12px',
-                    background: 'var(--bg-surface)',
-                    border: '1px solid var(--border-subtle)',
-                    borderRadius: 'var(--radius-sm)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                  }}
-                >
-                  <div style={{ maxWidth: '75%' }}>
-                    <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>{camp.title}</div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>
-                      Audience: {camp.audience.replace('_', ' ').toUpperCase()} • {camp.metrics.deliveredCount.toLocaleString()} delivered
+            campaigns.length === 0 ? (
+              <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                No push campaigns found in Firestore CAMPAIGNS collection.
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {campaigns.slice(0, 3).map((camp) => (
+                  <div
+                    key={camp.id}
+                    style={{
+                      padding: '12px',
+                      background: 'var(--bg-surface)',
+                      border: '1px solid var(--border-subtle)',
+                      borderRadius: 'var(--radius-sm)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                    }}
+                  >
+                    <div style={{ maxWidth: '75%' }}>
+                      <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>{camp.title}</div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                        Audience: {camp.audience.replace(/_/g, ' ').toUpperCase()} • {camp.metrics.deliveredCount.toLocaleString()} delivered
+                      </div>
                     </div>
-                  </div>
-                  <span className={`badge ${camp.status === 'completed' ? 'badge-success' : 'badge-warning'}`}>
-                    {camp.status}
-                  </span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {users.slice(0, 4).map((user) => (
-                <div
-                  key={user.id}
-                  style={{
-                    padding: '10px 12px',
-                    background: 'var(--bg-surface)',
-                    border: '1px solid var(--border-subtle)',
-                    borderRadius: 'var(--radius-sm)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <img src={user.avatarUrl} alt={user.name} style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }} />
-                    <div>
-                      <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>{user.name}</div>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{user.email}</div>
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span className={`badge ${user.tier === 'enterprise' ? 'badge-super' : user.tier === 'pro' ? 'badge-manager' : 'badge-neutral'}`}>
-                      {user.tier.toUpperCase()}
+                    <span className={`badge ${camp.status === 'completed' ? 'badge-success' : 'badge-warning'}`}>
+                      {camp.status}
                     </span>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )
+          ) : (
+            users.length === 0 ? (
+              <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                No user documents found in Firestore USERS collection.
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {users.slice(0, 4).map((user) => (
+                  <div
+                    key={user.id}
+                    style={{
+                      padding: '10px 12px',
+                      background: 'var(--bg-surface)',
+                      border: '1px solid var(--border-subtle)',
+                      borderRadius: 'var(--radius-sm)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <img src={user.avatarUrl} alt={user.name} style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }} />
+                      <div>
+                        <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>{user.name}</div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{user.email}</div>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span className={`badge ${user.tier === 'enterprise' ? 'badge-super' : user.tier === 'pro' ? 'badge-manager' : 'badge-neutral'}`}>
+                        {user.tier.toUpperCase()}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )
           )}
         </div>
 
@@ -318,32 +329,38 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
             </button>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {auditLogs.slice(0, 3).map((log) => (
-              <div
-                key={log.id}
-                style={{
-                  padding: '12px',
-                  background: 'var(--bg-surface)',
-                  border: '1px solid var(--border-subtle)',
-                  borderRadius: 'var(--radius-sm)',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-                  <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--accent-primary)', textTransform: 'uppercase' }}>
-                    {log.action.replace(/_/g, ' ')}
-                  </span>
-                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                    {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </span>
+          {auditLogs.length === 0 ? (
+            <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+              No audit logs recorded in Firestore AUDIT_LOGS collection.
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {auditLogs.slice(0, 3).map((log) => (
+                <div
+                  key={log.id}
+                  style={{
+                    padding: '12px',
+                    background: 'var(--bg-surface)',
+                    border: '1px solid var(--border-subtle)',
+                    borderRadius: 'var(--radius-sm)',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--accent-primary)', textTransform: 'uppercase' }}>
+                      {log.action.replace(/_/g, ' ')}
+                    </span>
+                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                      {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '0.825rem', color: 'var(--text-secondary)' }}>{log.description}</div>
+                  <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                    Actor: <strong>{log.actor.displayName}</strong> ({log.actor.role})
+                  </div>
                 </div>
-                <div style={{ fontSize: '0.825rem', color: 'var(--text-secondary)' }}>{log.description}</div>
-                <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-                  Actor: <strong>{log.actor.displayName}</strong> ({log.actor.role})
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -6,19 +6,20 @@ import {
   X,
   Edit,
   Database,
+  Loader2,
 } from 'lucide-react';
 import type { AdminUser, AdminRole, Permission } from '../../types/auth';
 import { ROLE_DEFINITIONS } from '../../types/auth';
 import { useAuth } from '../../context/AuthContext';
 import { firestoreService } from '../../services/firestoreService';
-import { mockService } from '../../services/mockService';
 import { useToast } from '../../context/ToastContext';
 
 export const AdminManagementView: React.FC = () => {
   const { currentAdmin, role, refreshAdminsList } = useAuth();
   const { showSuccess, showError } = useToast();
 
-  const [admins, setAdmins] = useState<AdminUser[]>(() => mockService.getAdmins());
+  const [admins, setAdmins] = useState<AdminUser[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [isLive, setIsLive] = useState(false);
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [selectedAdminForEdit, setSelectedAdminForEdit] = useState<AdminUser | null>(null);
@@ -35,15 +36,15 @@ export const AdminManagementView: React.FC = () => {
 
   useEffect(() => {
     firestoreService.getAdmins().then((res) => {
-      if (res.admins && res.admins.length > 0) {
-        setAdmins(res.admins);
-        setIsLive(res.isLive);
-      }
+      setAdmins(res.admins);
+      setIsLive(res.isLive);
+      setIsLoading(false);
     });
 
     const unsubscribe = firestoreService.subscribeToAdmins((updatedAdmins) => {
       setAdmins(updatedAdmins);
       setIsLive(true);
+      setIsLoading(false);
     });
 
     return () => {
@@ -174,11 +175,31 @@ export const AdminManagementView: React.FC = () => {
             </tr>
           </thead>
           <tbody>
-            {admins.map((adm) => {
-              const rDef = ROLE_DEFINITIONS[adm.role];
+            {isLoading ? (
+              <tr>
+                <td colSpan={6} style={{ textAlign: 'center', padding: '36px', color: 'var(--text-muted)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                    <Loader2 size={18} className="spin" style={{ color: 'var(--accent-primary)' }} />
+                    <span>Loading administrator accounts from Firestore...</span>
+                  </div>
+                </td>
+              </tr>
+            ) : admins.length === 0 ? (
+              <tr>
+                <td colSpan={6} style={{ textAlign: 'center', padding: '36px', color: 'var(--text-muted)' }}>
+                  <ShieldCheck size={28} style={{ margin: '0 auto 8px', opacity: 0.4 }} />
+                  <div style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>No Administrator Records in Firestore</div>
+                  <div style={{ fontSize: '0.8rem', marginTop: '4px' }}>
+                    Click &ldquo;Invite Admin&rdquo; above to provision the first administrator account in the ADMINS collection.
+                  </div>
+                </td>
+              </tr>
+            ) : (
+              admins.map((adm) => {
+                const rDef = ROLE_DEFINITIONS[adm.role];
 
-              return (
-                <tr key={adm.uid}>
+                return (
+                  <tr key={adm.uid}>
                   <td>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                       <img src={adm.avatarUrl} alt={adm.displayName} style={{ width: '36px', height: '36px', borderRadius: '50%', objectFit: 'cover' }} />
@@ -222,8 +243,9 @@ export const AdminManagementView: React.FC = () => {
                     </button>
                   </td>
                 </tr>
-              );
-            })}
+                );
+              })
+            )}
           </tbody>
         </table>
       </div>

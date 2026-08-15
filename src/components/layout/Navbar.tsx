@@ -5,26 +5,22 @@ import {
   RefreshCw,
   UserCheck,
   Sparkles,
-  Flame,
   LogOut,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { ROLE_DEFINITIONS } from '../../types/auth';
 import { useToast } from '../../context/ToastContext';
-import { isFirebaseConfigured, getStoredFirebaseConfig } from '../../services/firebaseClient';
+import { isFirebaseConfigured } from '../../services/firebaseClient';
 import { TokenClaimsInspectorModal } from '../auth/TokenClaimsInspectorModal';
-import { FirebaseConfigModal } from '../firebase/FirebaseConfigModal';
 
 export const Navbar: React.FC = () => {
   const { currentAdmin, isSuperAdmin, allAdmins, switchAdmin, refreshClaims, isRefreshingClaims, logout } = useAuth();
   const { showSuccess, showInfo } = useToast();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isClaimsModalOpen, setIsClaimsModalOpen] = useState(false);
-  const [isFirebaseModalOpen, setIsFirebaseModalOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const isLiveFirebase = isFirebaseConfigured();
-  const storedConfig = getStoredFirebaseConfig();
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -80,18 +76,33 @@ export const Navbar: React.FC = () => {
         </div>
 
         <div className="navbar-right">
-          {/* Firebase Connection Status Button */}
-          <button
-            className={`btn btn-sm ${isLiveFirebase ? 'btn-secondary' : 'btn-outline'}`}
-            onClick={() => setIsFirebaseModalOpen(true)}
-            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-            title={isLiveFirebase ? `Connected to Firebase: ${storedConfig?.projectId}` : 'Click to configure live Firebase credentials'}
+          {/* Firestore Connection Indicator (Safe Status, No Sensitive Credentials Exposed) */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '7px',
+              padding: '6px 12px',
+              background: 'var(--bg-surface)',
+              border: '1px solid var(--border-subtle)',
+              borderRadius: 'var(--radius-full)',
+              fontSize: '0.78rem',
+              color: 'var(--text-secondary)',
+            }}
           >
-            <Flame size={15} style={{ color: isLiveFirebase ? '#10b981' : '#f59e0b' }} />
-            <span style={{ fontSize: '0.8rem' }}>
-              {isLiveFirebase ? `Firestore: ${storedConfig?.projectId}` : 'Connect Firebase'}
+            <span
+              style={{
+                width: '7px',
+                height: '7px',
+                borderRadius: '50%',
+                backgroundColor: isLiveFirebase ? '#10b981' : '#f59e0b',
+                boxShadow: isLiveFirebase ? '0 0 8px rgba(16, 185, 129, 0.5)' : 'none',
+              }}
+            />
+            <span style={{ fontWeight: 500 }}>
+              {isLiveFirebase ? 'Firestore Online' : 'Firestore Offline'}
             </span>
-          </button>
+          </div>
 
           {/* Quick Custom Claims Inspector Button */}
           <button
@@ -251,11 +262,6 @@ export const Navbar: React.FC = () => {
       <TokenClaimsInspectorModal
         isOpen={isClaimsModalOpen}
         onClose={() => setIsClaimsModalOpen(false)}
-      />
-
-      <FirebaseConfigModal
-        isOpen={isFirebaseModalOpen}
-        onClose={() => setIsFirebaseModalOpen(false)}
       />
     </>
   );

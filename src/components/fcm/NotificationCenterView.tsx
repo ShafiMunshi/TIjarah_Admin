@@ -8,9 +8,10 @@ import {
   TrendingUp,
   Shield,
   Database,
+  Loader2,
 } from 'lucide-react';
 import type { TargetAudience, NotificationPriority, NotificationCampaign } from '../../types/notifications';
-import { AUDIENCE_SEGMENTS, INITIAL_CAMPAIGNS } from '../../services/mockData';
+import { AUDIENCE_SEGMENTS } from '../../types/notifications';
 import { useAuth } from '../../context/AuthContext';
 import { firestoreService } from '../../services/firestoreService';
 import { useToast } from '../../context/ToastContext';
@@ -20,7 +21,8 @@ export const NotificationCenterView: React.FC = () => {
   const { currentAdmin, role, hasPermission } = useAuth();
   const { showSuccess, showError } = useToast();
 
-  const [campaigns, setCampaigns] = useState<NotificationCampaign[]>(() => INITIAL_CAMPAIGNS);
+  const [campaigns, setCampaigns] = useState<NotificationCampaign[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [isLive, setIsLive] = useState(false);
   const [activeTab, setActiveTab] = useState<'composer' | 'history'>('composer');
 
@@ -43,15 +45,15 @@ export const NotificationCenterView: React.FC = () => {
 
   useEffect(() => {
     firestoreService.getCampaigns().then((res) => {
-      if (res.campaigns && res.campaigns.length > 0) {
-        setCampaigns(res.campaigns);
-        setIsLive(res.isLive);
-      }
+      setCampaigns(res.campaigns);
+      setIsLive(res.isLive);
+      setIsLoading(false);
     });
 
     const unsubscribe = firestoreService.subscribeToCampaigns((updatedCampaigns) => {
       setCampaigns(updatedCampaigns);
       setIsLive(true);
+      setIsLoading(false);
     });
 
     return () => {
@@ -367,8 +369,28 @@ export const NotificationCenterView: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {campaigns.map((camp) => (
-                <tr key={camp.id}>
+              {isLoading ? (
+                <tr>
+                  <td colSpan={7} style={{ textAlign: 'center', padding: '36px', color: 'var(--text-muted)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                      <Loader2 size={18} className="spin" style={{ color: 'var(--accent-primary)' }} />
+                      <span>Loading push campaigns from Firestore...</span>
+                    </div>
+                  </td>
+                </tr>
+              ) : campaigns.length === 0 ? (
+                <tr>
+                  <td colSpan={7} style={{ textAlign: 'center', padding: '36px', color: 'var(--text-muted)' }}>
+                    <Send size={28} style={{ margin: '0 auto 8px', opacity: 0.4 }} />
+                    <div style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>No Broadcast Campaigns in Firestore</div>
+                    <div style={{ fontSize: '0.8rem', marginTop: '4px' }}>
+                      Switch to the &ldquo;Campaign Composer&rdquo; tab above to broadcast push notifications to user devices.
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                campaigns.map((camp) => (
+                  <tr key={camp.id}>
                   <td>
                     <div>
                       <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{camp.title}</div>
@@ -409,8 +431,9 @@ export const NotificationCenterView: React.FC = () => {
                       {camp.createdBy.adminName}
                     </span>
                   </td>
-                </tr>
-              ))}
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
