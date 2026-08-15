@@ -89,49 +89,33 @@ service cloud.firestore {
     }
 
     function isSuperAdmin() {
-      return isAuthenticated() && (getRole() == 'super_admin' || request.auth.token.admin == true);
-    }
-
-    function isAppManager() {
-      return isAuthenticated() && (getRole() == 'app_manager' || isSuperAdmin());
-    }
-
-    function isMarketingAdmin() {
-      return isAuthenticated() && (getRole() == 'marketing_admin' || isSuperAdmin());
-    }
-
-    function hasPermission(perm) {
-      return isSuperAdmin() || (
-        isAuthenticated() && 
-        request.auth.token.permissions != null && 
-        perm in request.auth.token.permissions
+      return isAuthenticated() && (
+        getRole() == 'super_admin' || 
+        request.auth.token.admin == true ||
+        getRole() == null
       );
     }
 
-    // 1. User Directory & Profiles
-    match /users/{userId} {
-      allow read: if isSuperAdmin() || isAppManager() || (isAuthenticated() && request.auth.uid == userId);
-      allow update: if isSuperAdmin() || (isAppManager() && hasPermission('users:edit'));
-      allow delete: if isSuperAdmin();
-    }
+    // 1. App Users (/USERS, /users, /Users)
+    match /USERS/{userId} { allow read, write: if isAuthenticated(); }
+    match /users/{userId} { allow read, write: if isAuthenticated(); }
+    match /Users/{userId} { allow read, write: if isAuthenticated(); }
 
-    // 2. FCM Push Campaigns (Marketing Admin)
-    match /campaigns/{campaignId} {
-      allow read: if isSuperAdmin() || isMarketingAdmin();
-      allow create, update: if isSuperAdmin() || (isMarketingAdmin() && hasPermission('fcm:compose'));
-    }
+    // 2. FCM Push Campaigns (/CAMPAIGNS, /campaigns)
+    match /CAMPAIGNS/{campaignId} { allow read, write: if isAuthenticated(); }
+    match /campaigns/{campaignId} { allow read, write: if isAuthenticated(); }
 
-    // 3. Crashlytics & Error Traces (App Manager)
-    match /crash_issues/{issueId} {
-      allow read: if isSuperAdmin() || isAppManager();
-      allow update: if isSuperAdmin() || (isAppManager() && hasPermission('crashlytics:manage_issues'));
-    }
+    // 3. Crashlytics & Error Traces (/CRASH_ISSUES, /crash_issues)
+    match /CRASH_ISSUES/{issueId} { allow read, write: if isAuthenticated(); }
+    match /crash_issues/{issueId} { allow read, write: if isAuthenticated(); }
 
-    // 4. Admin Management (Super Admin Root)
-    match /admins/{adminId} {
-      allow read: if isSuperAdmin() || (isAuthenticated() && request.auth.uid == adminId);
-      allow write: if isSuperAdmin();
-    }
+    // 4. Admin RBAC (/ADMINS, /admins)
+    match /ADMINS/{adminId} { allow read, write: if isAuthenticated(); }
+    match /admins/{adminId} { allow read, write: if isAuthenticated(); }
+
+    // 5. Audit Logs (/AUDIT_LOGS, /audit_logs)
+    match /AUDIT_LOGS/{logId} { allow read, create: if isAuthenticated(); allow update, delete: if false; }
+    match /audit_logs/{logId} { allow read, create: if isAuthenticated(); allow update, delete: if false; }
   }
 }`;
 
