@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Search,
   ArrowUpDown,
@@ -12,85 +12,127 @@ import {
   XCircle,
   MessageSquare,
   EyeOff,
-  Mail,
-  User,
   Calendar,
   Crown,
   RotateCcw,
   Filter,
+  Send,
+  Smartphone,
+  Zap,
+  Loader2,
 } from 'lucide-react';
-import type { AppUser } from '../../types/users';
+import type { AppUser, UserQueryOptions, PaginatedUsersResult } from '../../types/users';
 import { useAuth } from '../../context/AuthContext';
 import { firestoreService } from '../../services/firestoreService';
 import { useToast } from '../../context/ToastContext';
 import { EditUserModal } from './EditUserModal';
+import { DirectNotificationModal } from './DirectNotificationModal';
+import { UserDevicesModal } from './UserDevicesModal';
 
 export const UserManagementView: React.FC = () => {
   const { role, hasPermission } = useAuth();
   const { showSuccess, showError, showInfo } = useToast();
 
-  const [usersList, setUsersList] = useState<AppUser[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isLiveFirestore, setIsLiveFirestore] = useState(false);
-  const [connectedCollection, setConnectedCollection] = useState('USERS');
+  // Paginated Server State
+  const [users, setUsers] = useState<AppUser[]>([]);
+  const [totalCount, setTotalCount] = useState<number>(0);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(10);
+  const [hasMore, setHasMore] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isLiveFirestore, setIsLiveFirestore] = useState<boolean>(false);
+  const [connectedCollection, setConnectedCollection] = useState<string>('USERS');
   const [firestoreError, setFirestoreError] = useState<string | null>(null);
 
-  // Dedicated Filter & Search States
-  const [nameSearch, setNameSearch] = useState('');
-  const [emailSearch, setEmailSearch] = useState('');
-  const [createdFrom, setCreatedFrom] = useState('');
-  const [createdTo, setCreatedTo] = useState('');
-  const [datePreset, setDatePreset] = useState<'all' | '7d' | '30d' | '90d' | 'this_year'>('all');
+  // Search & Filter States
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [searchField, setSearchField] = useState<'all' | 'email' | 'name' | 'phone' | 'id'>('all');
   const [premiumFilter, setPremiumFilter] = useState<'all' | 'premium' | 'free'>('all');
   const [verifiedFilter, setVerifiedFilter] = useState<'all' | 'verified' | 'unverified'>('all');
+  const [createdFrom, setCreatedFrom] = useState<string>('');
+  const [createdTo, setCreatedTo] = useState<string>('');
+  const [datePreset, setDatePreset] = useState<'all' | '7d' | '30d' | '90d' | 'this_year'>('all');
 
-  // Sorting & Pagination
-  const [sortField, setSortField] = useState<keyof AppUser>('joinedAt');
+  // Sorting
+  const [sortField, setSortField] = useState<keyof AppUser | undefined>(undefined);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
 
+  // Modals
   const [selectedUserForEdit, setSelectedUserForEdit] = useState<AppUser | null>(null);
+  const [selectedUserForNotify, setSelectedUserForNotify] = useState<AppUser | null>(null);
+  const [selectedUserForDevices, setSelectedUserForDevices] = useState<AppUser | null>(null);
+
+  // Firestore cursor map for fast back/forward navigation without reading skipped documents
+  const pageCursorsRef = useRef<{ [page: number]: any }>({ 1: null });
 
   const canEdit = hasPermission('users:edit');
   const canViewEmail = hasPermission('users:view_email') || role === 'super_admin';
   const canExport = hasPermission('users:export');
+  const canNotify = hasPermission('fcm:compose') || hasPermission('fcm:broadcast') || role === 'super_admin' || role === 'app_manager';
 
-  // Load users from Firestore / Local
-  const loadUsersData = async () => {
-    setIsLoading(true);
-    try {
-      const result = await firestoreService.getUsers();
-      setUsersList(result.users);
-      setIsLiveFirestore(result.isLiveFirestore);
-      setConnectedCollection(result.collectionName);
-      setFirestoreError(result.error || null);
-    } catch (err: any) {
-      console.error('Failed to load users:', err);
-      setFirestoreError(err?.message || 'Error fetching users from Firestore');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  // Server-side page fetcher
+  const loadPage = useCallback(
+    async (targetPage: number, resetHistory = false) => {
+      setIsLoading(true);
+      setFirestoreError(null);
 
-  useEffect(() => {
-    loadUsersData();
-
-    // Real-time Firestore subscription to 'USERS'
-    const unsubscribe = firestoreService.subscribeToUsers((res) => {
-      if (res.isLive) {
-        setUsersList(res.users);
-        setIsLiveFirestore(true);
-        setFirestoreError(null);
-      } else if (res.error) {
-        setFirestoreError(res.error);
+      if (resetHistory || targetPage === 1) {
+        pageCursorsRef.current = { 1: null };
       }
-    });
 
-    return () => {
-      unsubscribe();
-    };
-  }, []);
+      const cursorDoc = resetHistory || targetPage === 1 ? null : pageCursorsRef.current[targetPage] || null;
+
+      const queryOpts: UserQueryOptions = {
+        pageSize,
+        cursorDoc,
+        sortField,
+        sortOrder,
+        searchQuery: searchQuery.trim(),
+        searchField,
+        premiumFilter,
+        verifiedFilter,
+        createdFrom,
+        createdTo,
+      };
+
+      try {
+        const result: PaginatedUsersResult = await firestoreService.getUsersPaginated(queryOpts, targetPage);
+
+        setUsers(result.users);
+        setTotalCount(result.totalCount);
+        setCurrentPage(targetPage);
+        setHasMore(result.hasMore);
+        setIsLiveFirestore(result.isLiveFirestore);
+        setConnectedCollection(result.collectionName);
+
+        // Store next page cursor
+        if (result.lastVisibleDoc) {
+          pageCursorsRef.current[targetPage + 1] = result.lastVisibleDoc;
+        }
+
+        if (result.error) {
+          setFirestoreError(result.error);
+        }
+      } catch (err: any) {
+        console.error('Error loading paginated users:', err);
+        setFirestoreError(err?.message || 'Failed to load users from Firestore');
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [pageSize, sortField, sortOrder, searchQuery, searchField, premiumFilter, verifiedFilter, createdFrom, createdTo]
+  );
+
+  // Initial load
+  useEffect(() => {
+    loadPage(1, true);
+  }, [loadPage]);
+
+  // Handle Search Submission
+  const handleSearchSubmit = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    loadPage(1, true);
+  };
 
   // Quick Date Range Preset Handler
   const handleSelectDatePreset = (preset: 'all' | '7d' | '30d' | '90d' | 'this_year') => {
@@ -98,113 +140,61 @@ export const UserManagementView: React.FC = () => {
     const now = new Date();
     const toDateStr = now.toISOString().split('T')[0];
 
+    let fromStr = '';
+    let toStr = '';
+
     if (preset === 'all') {
-      setCreatedFrom('');
-      setCreatedTo('');
+      fromStr = '';
+      toStr = '';
     } else if (preset === '7d') {
       const past = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-      setCreatedFrom(past.toISOString().split('T')[0]);
-      setCreatedTo(toDateStr);
+      fromStr = past.toISOString().split('T')[0];
+      toStr = toDateStr;
     } else if (preset === '30d') {
       const past = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-      setCreatedFrom(past.toISOString().split('T')[0]);
-      setCreatedTo(toDateStr);
+      fromStr = past.toISOString().split('T')[0];
+      toStr = toDateStr;
     } else if (preset === '90d') {
       const past = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
-      setCreatedFrom(past.toISOString().split('T')[0]);
-      setCreatedTo(toDateStr);
+      fromStr = past.toISOString().split('T')[0];
+      toStr = toDateStr;
     } else if (preset === 'this_year') {
       const startOfYear = new Date(now.getFullYear(), 0, 1);
-      setCreatedFrom(startOfYear.toISOString().split('T')[0]);
-      setCreatedTo(toDateStr);
+      fromStr = startOfYear.toISOString().split('T')[0];
+      toStr = toDateStr;
     }
-    setCurrentPage(1);
+
+    setCreatedFrom(fromStr);
+    setCreatedTo(toStr);
   };
 
   // Reset all filters
   const handleResetFilters = () => {
-    setNameSearch('');
-    setEmailSearch('');
+    setSearchQuery('');
+    setSearchField('all');
+    setPremiumFilter('all');
+    setVerifiedFilter('all');
     setCreatedFrom('');
     setCreatedTo('');
     setDatePreset('all');
-    setPremiumFilter('all');
-    setVerifiedFilter('all');
-    setCurrentPage(1);
-    showInfo('Filters Cleared', 'Displaying all records');
+    showInfo('Filters Reset', 'Displaying page 1 of all users');
+    setTimeout(() => {
+      loadPage(1, true);
+    }, 0);
   };
 
   // Active filters count
-  const activeFiltersCount = useMemo(() => {
-    let count = 0;
-    if (nameSearch.trim()) count++;
-    if (emailSearch.trim()) count++;
-    if (createdFrom || createdTo) count++;
-    if (premiumFilter !== 'all') count++;
-    if (verifiedFilter !== 'all') count++;
-    return count;
-  }, [nameSearch, emailSearch, createdFrom, createdTo, premiumFilter, verifiedFilter]);
+  const activeFiltersCount =
+    (searchQuery.trim() ? 1 : 0) +
+    (premiumFilter !== 'all' ? 1 : 0) +
+    (verifiedFilter !== 'all' ? 1 : 0) +
+    (createdFrom || createdTo ? 1 : 0);
 
-  // Main Filtering and Sorting Logic
-  const filteredUsers = useMemo(() => {
-    return usersList
-      .filter((u) => {
-        // 1. Name Searching (firstName, lastName, or name)
-        if (nameSearch.trim()) {
-          const query = nameSearch.toLowerCase();
-          const first = (u.firstName || '').toLowerCase();
-          const last = (u.lastName || '').toLowerCase();
-          const full = (u.name || `${first} ${last}`).toLowerCase();
-          if (!first.includes(query) && !last.includes(query) && !full.includes(query)) {
-            return false;
-          }
-        }
-
-        // 2. Email Searching
-        if (emailSearch.trim()) {
-          const query = emailSearch.toLowerCase();
-          const email = (u.email || '').toLowerCase();
-          if (!email.includes(query)) {
-            return false;
-          }
-        }
-
-        // 3. Premium User Searching (is_premium: 1 vs 0)
-        if (premiumFilter === 'premium' && u.is_premium !== 1) return false;
-        if (premiumFilter === 'free' && u.is_premium === 1) return false;
-
-        // 4. Verification Filtering
-        if (verifiedFilter === 'verified' && !u.isVerified) return false;
-        if (verifiedFilter === 'unverified' && u.isVerified) return false;
-
-        // 5. Created At Date Range Searching
-        if (createdFrom || createdTo) {
-          const userJoinedDate = u.joinedAt ? new Date(u.joinedAt).toISOString().split('T')[0] : '';
-          if (createdFrom && userJoinedDate < createdFrom) return false;
-          if (createdTo && userJoinedDate > createdTo) return false;
-        }
-
-        return true;
-      })
-      .sort((a, b) => {
-        let valA = a[sortField];
-        let valB = b[sortField];
-
-        if (typeof valA === 'string') valA = (valA as string).toLowerCase();
-        if (typeof valB === 'string') valB = (valB as string).toLowerCase();
-
-        if (valA! < valB!) return sortOrder === 'asc' ? -1 : 1;
-        if (valA! > valB!) return sortOrder === 'asc' ? 1 : -1;
-        return 0;
-      });
-  }, [usersList, nameSearch, emailSearch, premiumFilter, verifiedFilter, createdFrom, createdTo, sortField, sortOrder]);
-
-  const totalPages = Math.ceil(filteredUsers.length / itemsPerPage) || 1;
-  const paginatedUsers = filteredUsers.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
   const handleSort = (field: keyof AppUser) => {
     if (sortField === field) {
-      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+      setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
     } else {
       setSortField(field);
       setSortOrder('desc');
@@ -217,7 +207,7 @@ export const UserManagementView: React.FC = () => {
       return;
     }
     const headers = ['UID', 'First Name', 'Last Name', 'Email', 'Phone', 'Is Premium', 'Expire Date', 'Message Remaining', 'Created At', 'Is Verified'];
-    const rows = filteredUsers.map((u) => [
+    const rows = users.map((u) => [
       u.id,
       u.firstName || '',
       u.lastName || '',
@@ -233,14 +223,13 @@ export const UserManagementView: React.FC = () => {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `tijarah_users_collection_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute('download', `tijarah_users_page_${currentPage}_${new Date().toISOString().split('T')[0]}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    showSuccess('CSV Export Complete', `Exported ${filteredUsers.length} user records from USERS collection`);
+    showSuccess('CSV Export Complete', `Exported ${users.length} user records from current page`);
   };
 
-  // Helper for masking email if userEmailView permission is missing
   const formatEmail = (rawEmail: string) => {
     if (canViewEmail) return rawEmail;
     if (!rawEmail) return 'No email';
@@ -249,7 +238,6 @@ export const UserManagementView: React.FC = () => {
     return `${parts[0].slice(0, 2)}***@***.${parts[1].split('.').pop() || 'com'}`;
   };
 
-  // Helper for rendering expire_date with remaining days badge
   const renderExpireBadge = (user: AppUser) => {
     const rawDate = user.expire_date || user.expireAt || user.expiresAt;
     if (!rawDate) {
@@ -295,27 +283,47 @@ export const UserManagementView: React.FC = () => {
       <div className="user-page-header">
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-            <h1 style={{ fontSize: '1.5rem', fontWeight: 700 }}>USERS Collection Data Table</h1>
+            <h1 style={{ fontSize: '1.5rem', fontWeight: 700 }}>USERS Management</h1>
             <span
               className={`badge ${isLiveFirestore ? 'badge-success' : 'badge-neutral'}`}
               style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}
             >
               <Database size={12} />
               <span>
-                {isLiveFirestore ? `Live Firestore: ${connectedCollection} (${usersList.length} docs)` : 'Local Mode / Firestore Notice'}
+                {isLiveFirestore ? `Live Firestore: ${connectedCollection}` : 'Local Demo Cache'}
               </span>
+            </span>
+
+            {/* Cost-Optimization Guarantee Pill */}
+            <span
+              style={{
+                background: 'rgba(34, 197, 94, 0.1)',
+                border: '1px solid rgba(34, 197, 94, 0.3)',
+                color: 'var(--status-success)',
+                fontSize: '0.725rem',
+                fontWeight: 600,
+                padding: '3px 9px',
+                borderRadius: '12px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+              }}
+            >
+              <Zap size={12} />
+              <span>Firestore Paginated ({pageSize} reads / page)</span>
             </span>
           </div>
           <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
-            Synchronized with <code style={{ color: 'var(--accent-primary)', fontWeight: 600 }}>{connectedCollection}</code> collection. Filter by name, email, created range, and premium tier. Manage <code style={{ color: 'var(--accent-primary)', fontWeight: 600 }}>messageRemaining</code> and <code style={{ color: 'var(--accent-primary)', fontWeight: 600 }}>expire_date</code>.
+            Server-side cursor pagination &amp; search. Fetches only <strong>{pageSize} records</strong> per page to prevent expensive unbounded reads on large user bases.
           </p>
         </div>
 
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
           <button
             className="btn btn-outline btn-sm btn-icon-only"
-            onClick={loadUsersData}
-            title="Refresh Users from Firestore"
+            onClick={() => loadPage(currentPage, false)}
+            title="Refresh current page"
+            disabled={isLoading}
           >
             <RefreshCw size={15} className={isLoading ? 'spin-anim' : ''} />
           </button>
@@ -323,15 +331,15 @@ export const UserManagementView: React.FC = () => {
           <button
             className="btn btn-secondary btn-sm"
             onClick={handleExportCSV}
-            disabled={!canExport}
-            title={!canExport ? 'Export restricted for your role' : 'Export current filtered table to CSV'}
+            disabled={!canExport || users.length === 0}
+            title={!canExport ? 'Export restricted for your role' : 'Export current page to CSV'}
           >
-            <Download size={15} /> Export CSV
+            <Download size={15} /> Export Page CSV
           </button>
         </div>
       </div>
 
-      {/* Firestore Diagnostic / Error Banner if connection or permission failed */}
+      {/* Firestore Diagnostic Notice if any */}
       {firestoreError && (
         <div
           style={{
@@ -342,32 +350,28 @@ export const UserManagementView: React.FC = () => {
             marginBottom: '16px',
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'space-between',
             gap: '12px',
-            flexWrap: 'wrap',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <XCircle size={18} style={{ color: 'var(--status-danger)', flexShrink: 0 }} />
-            <div>
-              <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--status-danger)' }}>
-                Firestore Connection Notice
-              </div>
-              <div style={{ fontSize: '0.775rem', color: 'var(--text-secondary)' }}>
-                {firestoreError}
-              </div>
+          <XCircle size={18} style={{ color: 'var(--status-danger)', flexShrink: 0 }} />
+          <div>
+            <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--status-danger)' }}>
+              Query Notice
+            </div>
+            <div style={{ fontSize: '0.775rem', color: 'var(--text-secondary)' }}>
+              {firestoreError}
             </div>
           </div>
         </div>
       )}
 
-      {/* ADVANCED MULTI-FIELD SEARCH & FILTER TOOLBAR */}
+      {/* SERVER-SIDE SEARCH & FILTER TOOLBAR */}
       <div className="filter-toolbar">
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '10px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Filter size={15} style={{ color: 'var(--accent-primary)' }} />
             <span style={{ fontSize: '0.825rem', fontWeight: 600, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              Advanced Search & Range Filter
+              Firestore Server Query &amp; Filter
             </span>
             {activeFiltersCount > 0 && (
               <span className="badge badge-manager" style={{ fontSize: '0.68rem', padding: '2px 7px' }}>
@@ -382,64 +386,80 @@ export const UserManagementView: React.FC = () => {
               onClick={handleResetFilters}
               style={{ padding: '3px 10px', fontSize: '0.75rem', gap: '5px' }}
             >
-              <RotateCcw size={12} /> Clear All Filters
+              <RotateCcw size={12} /> Reset Query
             </button>
           )}
         </div>
 
-        {/* Search Row: Name, Email, Premium, Created At Range */}
-        <div className="filter-grid-row">
-          {/* 1. Name Searching Box */}
-          <div className="filter-item-group">
-            <label className="filter-item-label">
-              <User size={13} /> Name Search
+        {/* Search Row */}
+        <form onSubmit={handleSearchSubmit} className="filter-grid-row">
+          {/* 1. Search Query Box with Field Selector */}
+          <div className="filter-item-group" style={{ gridColumn: 'span 2' }}>
+            <label className="filter-item-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <Search size={13} /> Server Search Query
+              </span>
+              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                Press Enter to execute Firestore query
+              </span>
             </label>
-            <div className="search-input-wrapper">
-              <Search size={15} className="search-icon-inside" />
-              <input
-                type="text"
-                className="form-input search-input-field"
-                placeholder="Search by first / last name..."
-                value={nameSearch}
-                onChange={(e) => {
-                  setNameSearch(e.target.value);
-                  setCurrentPage(1);
-                }}
-              />
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <select
+                className="form-select"
+                style={{ width: '130px', flexShrink: 0 }}
+                value={searchField}
+                onChange={(e) => setSearchField(e.target.value as any)}
+              >
+                <option value="all">Auto-detect</option>
+                <option value="email">Email</option>
+                <option value="name">First Name</option>
+                <option value="phone">Phone</option>
+                <option value="id">User ID (1 Read)</option>
+              </select>
+
+              <div className="search-input-wrapper" style={{ flex: 1 }}>
+                <Search size={15} className="search-icon-inside" />
+                <input
+                  type="text"
+                  className="form-input search-input-field"
+                  placeholder={
+                    searchField === 'id'
+                      ? 'Enter exact user UID / Document ID (costs only 1 read)...'
+                      : searchField === 'email'
+                      ? 'Search email prefix (e.g. test@...)...'
+                      : searchField === 'phone'
+                      ? 'Enter phone number...'
+                      : searchField === 'name'
+                      ? 'Search first name...'
+                      : 'Search name, email, phone or UID...'
+                  }
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="btn btn-primary btn-sm"
+                style={{ padding: '0 16px', flexShrink: 0 }}
+                disabled={isLoading}
+              >
+                {isLoading ? <Loader2 size={14} className="spin-anim" /> : <Search size={14} />}
+                <span>Search</span>
+              </button>
             </div>
           </div>
 
-          {/* 2. Email Searching Box (Placed prominently right above email field) */}
+          {/* 2. Premium Status Filter */}
           <div className="filter-item-group">
             <label className="filter-item-label">
-              <Mail size={13} /> Email Search
-            </label>
-            <div className="search-input-wrapper">
-              <Mail size={15} className="search-icon-inside" />
-              <input
-                type="text"
-                className="form-input search-input-field"
-                placeholder="Search email (e.g. @mail.com)..."
-                value={emailSearch}
-                onChange={(e) => {
-                  setEmailSearch(e.target.value);
-                  setCurrentPage(1);
-                }}
-              />
-            </div>
-          </div>
-
-          {/* 3. Premium Status Filter Box */}
-          <div className="filter-item-group">
-            <label className="filter-item-label">
-              <Crown size={13} /> Premium Membership
+              <Crown size={13} /> Membership
             </label>
             <select
               className="form-select"
               value={premiumFilter}
               onChange={(e) => {
                 setPremiumFilter(e.target.value as any);
-                setCurrentPage(1);
               }}
             >
               <option value="all">All Memberships</option>
@@ -448,7 +468,7 @@ export const UserManagementView: React.FC = () => {
             </select>
           </div>
 
-          {/* 4. Verification Filter */}
+          {/* 3. Verification Filter */}
           <div className="filter-item-group">
             <label className="filter-item-label">
               <CheckCircle2 size={13} /> Verification
@@ -458,7 +478,6 @@ export const UserManagementView: React.FC = () => {
               value={verifiedFilter}
               onChange={(e) => {
                 setVerifiedFilter(e.target.value as any);
-                setCurrentPage(1);
               }}
             >
               <option value="all">All Accounts</option>
@@ -466,13 +485,13 @@ export const UserManagementView: React.FC = () => {
               <option value="unverified">Unverified (isVerified = false)</option>
             </select>
           </div>
-        </div>
+        </form>
 
-        {/* 5. Created At Date Range Filter Row */}
+        {/* Date Range Row */}
         <div style={{ marginTop: '4px', paddingTop: '10px', borderTop: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
             <span className="filter-item-label" style={{ margin: 0 }}>
-              <Calendar size={13} /> Created At Range:
+              <Calendar size={13} /> Joined Date:
             </span>
 
             <div className="date-range-container">
@@ -484,7 +503,6 @@ export const UserManagementView: React.FC = () => {
                 onChange={(e) => {
                   setCreatedFrom(e.target.value);
                   setDatePreset('all');
-                  setCurrentPage(1);
                 }}
                 title="From Date"
               />
@@ -497,13 +515,11 @@ export const UserManagementView: React.FC = () => {
                 onChange={(e) => {
                   setCreatedTo(e.target.value);
                   setDatePreset('all');
-                  setCurrentPage(1);
                 }}
                 title="To Date"
               />
             </div>
 
-            {/* Quick Range Preset Pills */}
             <div className="date-preset-pills">
               <button
                 type="button"
@@ -544,7 +560,7 @@ export const UserManagementView: React.FC = () => {
           </div>
 
           <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-            Found <strong style={{ color: 'var(--text-primary)' }}>{filteredUsers.length}</strong> matching users
+            Showing Page <strong>{currentPage}</strong> of <strong>{totalPages}</strong> ({totalCount.toLocaleString()} total documents)
           </div>
         </div>
       </div>
@@ -586,17 +602,28 @@ export const UserManagementView: React.FC = () => {
                 </div>
               </th>
               <th>Verified</th>
-              <th style={{ textAlign: 'right' }}>Actions</th>
+              <th style={{ textAlign: 'right', width: '180px' }}>Actions</th>
             </tr>
           </thead>
           <tbody>
-            {paginatedUsers.length === 0 ? (
+            {isLoading ? (
+              <tr>
+                <td colSpan={9} style={{ textAlign: 'center', padding: '48px 24px', color: 'var(--text-muted)' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+                    <Loader2 size={28} className="spin-anim" style={{ color: 'var(--accent-primary)' }} />
+                    <div style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                      Fetching {pageSize} users from Firestore USERS collection...
+                    </div>
+                  </div>
+                </td>
+              </tr>
+            ) : users.length === 0 ? (
               <tr>
                 <td colSpan={9} style={{ textAlign: 'center', padding: '48px 24px', color: 'var(--text-muted)' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
                     <Search size={28} style={{ color: 'var(--text-muted)' }} />
                     <div style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
-                      {isLoading ? 'Fetching documents from USERS collection in Firestore...' : 'No users match your search criteria'}
+                      No user documents found matching your query
                     </div>
                     {activeFiltersCount > 0 && (
                       <button className="btn btn-secondary btn-sm" onClick={handleResetFilters}>
@@ -607,7 +634,7 @@ export const UserManagementView: React.FC = () => {
                 </td>
               </tr>
             ) : (
-              paginatedUsers.map((user) => {
+              users.map((user) => {
                 const isPrem = user.is_premium === 1;
 
                 return (
@@ -641,7 +668,7 @@ export const UserManagementView: React.FC = () => {
 
                     <td>
                       <span style={{ fontSize: '0.85rem', fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' }}>
-                        {user.phone || '-'}
+                        {user.phone || user.phoneNumber || '-'}
                       </span>
                     </td>
 
@@ -662,9 +689,7 @@ export const UserManagementView: React.FC = () => {
                       </div>
                     </td>
 
-                    <td>
-                      {renderExpireBadge(user)}
-                    </td>
+                    <td>{renderExpireBadge(user)}</td>
 
                     <td>
                       <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
@@ -685,16 +710,40 @@ export const UserManagementView: React.FC = () => {
                     </td>
 
                     <td style={{ textAlign: 'right' }}>
-                      <button
-                        className="btn btn-secondary btn-sm"
-                        onClick={() => setSelectedUserForEdit(user)}
-                        disabled={!canEdit}
-                        style={{ padding: '6px 10px', gap: '6px' }}
-                        title={!canEdit ? 'Edit user restricted' : 'Edit profile, messageRemaining & expire_date'}
-                      >
-                        <Edit2 size={13} />
-                        <span>Edit</span>
-                      </button>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px' }}>
+                        {/* Connected Devices button */}
+                        <button
+                          className="btn btn-outline btn-sm btn-icon-only"
+                          onClick={() => setSelectedUserForDevices(user)}
+                          title="View Registered FCM Devices (USERS/{userId}/DEVICES)"
+                          style={{ padding: '5px 7px' }}
+                        >
+                          <Smartphone size={13} style={{ color: 'var(--status-success)' }} />
+                        </button>
+
+                        {/* Send Notification button */}
+                        <button
+                          className="btn btn-outline btn-sm btn-icon-only"
+                          onClick={() => setSelectedUserForNotify(user)}
+                          disabled={!canNotify}
+                          title={!canNotify ? 'Push broadcast restricted' : 'Send Push Message to /topics/user_' + user.id}
+                          style={{ padding: '5px 7px' }}
+                        >
+                          <Send size={13} style={{ color: 'var(--accent-primary)' }} />
+                        </button>
+
+                        {/* Edit User button */}
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => setSelectedUserForEdit(user)}
+                          disabled={!canEdit}
+                          style={{ padding: '5px 9px', gap: '4px' }}
+                          title={!canEdit ? 'Edit user restricted' : 'Edit profile, messageRemaining & expire_date'}
+                        >
+                          <Edit2 size={12} />
+                          <span>Edit</span>
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -703,26 +752,24 @@ export const UserManagementView: React.FC = () => {
           </tbody>
         </table>
 
-        {/* Pagination & Rows Selector */}
+        {/* Server-Side Pagination Footer */}
         <div className="pagination-footer">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
             <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-              Showing {filteredUsers.length === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1} to{' '}
-              {Math.min(currentPage * itemsPerPage, filteredUsers.length)} of {filteredUsers.length} users
+              Page <strong>{currentPage}</strong> of <strong>{totalPages}</strong> &bull; Showing {users.length} records (
+              {totalCount.toLocaleString()} total in index)
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.775rem', color: 'var(--text-muted)' }}>
-              <span>Rows per page:</span>
+              <span>Page size:</span>
               <select
                 className="form-select"
                 style={{ width: '65px', padding: '3px 6px', fontSize: '0.775rem' }}
-                value={itemsPerPage}
+                value={pageSize}
                 onChange={(e) => {
-                  setItemsPerPage(Number(e.target.value));
-                  setCurrentPage(1);
+                  setPageSize(Number(e.target.value));
                 }}
               >
-                <option value={5}>5</option>
                 <option value={10}>10</option>
                 <option value={25}>25</option>
                 <option value={50}>50</option>
@@ -732,29 +779,25 @@ export const UserManagementView: React.FC = () => {
 
           <div className="pagination-pages">
             <button
-              className="btn btn-secondary btn-sm btn-icon-only"
-              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-              disabled={currentPage === 1}
+              className="btn btn-secondary btn-sm"
+              style={{ gap: '4px', padding: '5px 10px' }}
+              onClick={() => loadPage(currentPage - 1)}
+              disabled={currentPage <= 1 || isLoading}
             >
-              <ChevronLeft size={16} />
+              <ChevronLeft size={15} /> Prev 10
             </button>
 
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => (
-              <button
-                key={pageNum}
-                className={`page-num-btn ${currentPage === pageNum ? 'active' : ''}`}
-                onClick={() => setCurrentPage(pageNum)}
-              >
-                {pageNum}
-              </button>
-            ))}
+            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-primary)', padding: '0 8px' }}>
+              {currentPage} / {totalPages}
+            </span>
 
             <button
-              className="btn btn-secondary btn-sm btn-icon-only"
-              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-              disabled={currentPage === totalPages}
+              className="btn btn-secondary btn-sm"
+              style={{ gap: '4px', padding: '5px 10px' }}
+              onClick={() => loadPage(currentPage + 1)}
+              disabled={(!hasMore && currentPage >= totalPages) || isLoading}
             >
-              <ChevronRight size={16} />
+              Next 10 <ChevronRight size={15} />
             </button>
           </div>
         </div>
@@ -766,7 +809,24 @@ export const UserManagementView: React.FC = () => {
         isOpen={!!selectedUserForEdit}
         onClose={() => setSelectedUserForEdit(null)}
         onUserUpdated={() => {
-          loadUsersData();
+          loadPage(currentPage, false);
+        }}
+      />
+
+      {/* Direct Push Modal */}
+      <DirectNotificationModal
+        user={selectedUserForNotify}
+        isOpen={!!selectedUserForNotify}
+        onClose={() => setSelectedUserForNotify(null)}
+      />
+
+      {/* Connected Devices Modal */}
+      <UserDevicesModal
+        user={selectedUserForDevices}
+        isOpen={!!selectedUserForDevices}
+        onClose={() => setSelectedUserForDevices(null)}
+        onSendNotificationToUser={(u) => {
+          setSelectedUserForNotify(u);
         }}
       />
     </div>

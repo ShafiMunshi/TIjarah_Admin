@@ -5,11 +5,15 @@ import {
   getDocs,
   setDoc,
   onSnapshot,
-  writeBatch,
   Timestamp,
   serverTimestamp,
   query,
   where,
+  orderBy,
+  limit,
+  startAfter,
+  getCountFromServer,
+  QueryConstraint,
 } from 'firebase/firestore';
 import {
   signInWithEmailAndPassword,
@@ -20,19 +24,12 @@ import {
 } from 'firebase/auth';
 import type { User as FirebaseUser } from 'firebase/auth';
 import { getDb, getFirebaseAuth, isFirebaseConfigured } from './firebaseClient';
-import type { AppUser, SubscriptionTier } from '../types/users';
+import type { AppUser, SubscriptionTier, UserDevice, UserQueryOptions, PaginatedUsersResult } from '../types/users';
 import type { AdminUser, AdminRole, Permission, FirestoreAdminPermissions } from '../types/auth';
-import type { NotificationCampaign, TargetAudience, NotificationPriority } from '../types/notifications';
+import type { NotificationCampaign, TargetAudience, NotificationPriority, NotificationPayload } from '../types/notifications';
 import type { CrashIssue, CrashStatus } from '../types/crashlytics';
 import type { AuditLogEntry, AuditActionType } from '../types/audit';
 import { ROLE_DEFINITIONS } from '../types/auth';
-import {
-  INITIAL_USERS,
-  INITIAL_ADMINS,
-  INITIAL_CAMPAIGNS,
-  INITIAL_CRASH_ISSUES,
-  INITIAL_AUDIT_LOGS,
-} from './mockData';
 
 export interface FirestoreFetchResult {
   users: AppUser[];
@@ -262,9 +259,461 @@ export class FirestoreService {
   }
 
   /**
-   * Fetch all users from Firestore 'USERS' collection (with primary targeting of USERS)
+   * Fetch paginated users from Firestore 'USERS' collection (Cost-optimized server-side query with limit & cursors)
    */
-  public async getUsers(): Promise<FirestoreFetchResult> {
+  public async getUsersPaginated(
+    options: UserQueryOptions = {},
+    pageNum = 1
+  ): Promise<PaginatedUsersResult> {
+    const db = getDb();
+    const pageSize = options.pageSize || 10;
+
+    if (!db || !isFirebaseConfigured()) {
+      return {
+        users: [],
+        totalCount: 0,
+        page: pageNum,
+        pageSize,
+        hasMore: false,
+        isLiveFirestore: false,
+        collectionName: 'USERS',
+        error: 'Firebase is not configured or offline',
+      };
+    }
+
+    try {
+      let usedCollection = 'USERS';
+      let usersCol = collection(db, usedCollection);
+
+      // 1. Direct Single Document ID / UID Search (Costs only 1 read!)
+      const directId = (options.userIdSearch || (options.searchField === 'id' ? options.searchQuery : '') || '').trim();
+      if (directId) {
+        try {
+          const directDoc = await getDoc(doc(db, usedCollection, directId));
+          if (directDoc.exists()) {
+            const singleUser = this.normalizeUserDoc(directDoc.id, directDoc.data());
+            return {
+              users: [singleUser],
+              totalCount: 1,
+              page: 1,
+              pageSize,
+              hasMore: false,
+              firstVisibleDoc: directDoc,
+              lastVisibleDoc: directDoc,
+              isLiveFirestore: true,
+              collectionName: usedCollection,
+              error: null,
+            };
+          } else {
+            // Also test fallback lowercase 'users'
+            const fallbackDoc = await getDoc(doc(db, 'users', directId));
+            if (fallbackDoc.exists()) {
+              const singleUser = this.normalizeUserDoc(fallbackDoc.id, fallbackDoc.data());
+              return {
+                users: [singleUser],
+                totalCount: 1,
+                page: 1,
+                pageSize,
+                hasMore: false,
+                firstVisibleDoc: fallbackDoc,
+                lastVisibleDoc: fallbackDoc,
+                isLiveFirestore: true,
+                collectionName: 'users',
+                error: null,
+              };
+            }
+            return {
+              users: [],
+              totalCount: 0,
+              page: 1,
+              pageSize,
+              hasMore: false,
+              isLiveFirestore: true,
+              collectionName: usedCollection,
+              error: null,
+            };
+          }
+        } catch (idErr) {
+          console.warn('Direct ID search failed:', idErr);
+        }
+      }
+
+      // 2. Build Query Constraints
+      const constraints: QueryConstraint[] = [];
+
+      // Premium Filter
+      if (options.premiumFilter === 'premium') {
+        constraints.push(where('is_premium', '==', 1));
+      } else if (options.premiumFilter === 'free') {
+        constraints.push(where('is_premium', '==', 0));
+      }
+
+      // Verification Filter
+      if (options.verifiedFilter === 'verified') {
+        constraints.push(where('isVerified', '==', true));
+      } else if (options.verifiedFilter === 'unverified') {
+        constraints.push(where('isVerified', '==', false));
+      }
+
+      // Server Search Filter by Field
+      const qText = (options.searchQuery || '').trim();
+      const sField = options.searchField || 'all';
+
+      if (qText) {
+        if (sField === 'email' || (sField === 'all' && qText.includes('@'))) {
+          constraints.push(where('email', '>=', qText.toLowerCase()));
+          constraints.push(where('email', '<=', qText.toLowerCase() + '\uf8ff'));
+        } else if (sField === 'phone' || (sField === 'all' && /^[\d+ -]+$/.test(qText) && qText.length > 5)) {
+          constraints.push(where('phone', '==', qText));
+        } else if (sField === 'name') {
+          constraints.push(where('firstName', '>=', qText));
+          constraints.push(where('firstName', '<=', qText + '\uf8ff'));
+        }
+      }
+
+      // 3. Count Total Matching Documents cheaply via Aggregation Query
+      let totalCount = 0;
+      try {
+        const countQuery = query(usersCol, ...constraints);
+        const countSnapshot = await getCountFromServer(countQuery);
+        totalCount = countSnapshot.data().count;
+
+        // If USERS collection is empty and no filters, check 'users' collection
+        if (totalCount === 0 && !qText && constraints.length === 0) {
+          try {
+            const fallbackCountSnap = await getCountFromServer(collection(db, 'users'));
+            if (fallbackCountSnap.data().count > 0) {
+              totalCount = fallbackCountSnap.data().count;
+              usedCollection = 'users';
+              usersCol = collection(db, 'users');
+            }
+          } catch {
+            // ignore
+          }
+        }
+      } catch (countErr) {
+        console.warn('Firestore getCountFromServer failed, will use result length:', countErr);
+      }
+
+      // 4. Cursor Pagination & Sorting
+      const sortField = options.sortField;
+      const sortOrder = options.sortOrder || 'desc';
+
+      const queryConstraintsWithSort = [...constraints];
+
+      // Only add ordering if the user specifically requested sorting on a supported field (and not prefix search)
+      if (sortField && sortField !== 'joinedAt' && sortField !== 'createdAt' && !qText) {
+        try {
+          if (sortField === 'is_premium') {
+            queryConstraintsWithSort.push(orderBy('is_premium', sortOrder));
+          } else if (sortField === 'messageRemaining') {
+            queryConstraintsWithSort.push(orderBy('messageRemaining', sortOrder));
+          } else if (sortField === 'expire_date') {
+            queryConstraintsWithSort.push(orderBy('expire_date', sortOrder));
+          } else if (sortField === 'firstName' || sortField === 'name') {
+            queryConstraintsWithSort.push(orderBy('firstName', sortOrder));
+          } else if (sortField === 'email') {
+            queryConstraintsWithSort.push(orderBy('email', sortOrder));
+          }
+        } catch {
+          // Ignore order index warning
+        }
+      }
+
+      // Cursor: startAfter previous page's last document
+      if (options.cursorDoc) {
+        queryConstraintsWithSort.push(startAfter(options.cursorDoc));
+      }
+
+      // Fetch requested pageSize + 1 to detect if next page exists
+      queryConstraintsWithSort.push(limit(pageSize + 1));
+
+      let snapshot;
+      try {
+        const finalQuery = query(usersCol, ...queryConstraintsWithSort);
+        snapshot = await getDocs(finalQuery);
+      } catch (queryErr: any) {
+        console.warn('Ordered Firestore query failed, falling back to simple limit query:', queryErr);
+        const fallbackConstraints: QueryConstraint[] = [...constraints];
+        if (options.cursorDoc) {
+          fallbackConstraints.push(startAfter(options.cursorDoc));
+        }
+        fallbackConstraints.push(limit(pageSize + 1));
+        snapshot = await getDocs(query(usersCol, ...fallbackConstraints));
+      }
+
+      // If initial query on USERS returned empty, test 'users' lowercase collection
+      if (snapshot.empty && !options.cursorDoc && !qText && constraints.length === 0 && usedCollection === 'USERS') {
+        try {
+          const fallbackCol = collection(db, 'users');
+          const fallbackSnap = await getDocs(query(fallbackCol, limit(pageSize + 1)));
+          if (!fallbackSnap.empty) {
+            snapshot = fallbackSnap;
+            usedCollection = 'users';
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      const docs = snapshot.docs;
+      const hasMore = docs.length > pageSize;
+      const pageDocs = hasMore ? docs.slice(0, pageSize) : docs;
+
+      const users: AppUser[] = [];
+      pageDocs.forEach((docSnap) => {
+        users.push(this.normalizeUserDoc(docSnap.id, docSnap.data()));
+      });
+
+      const firstVisibleDoc = pageDocs.length > 0 ? pageDocs[0] : null;
+      const lastVisibleDoc = pageDocs.length > 0 ? pageDocs[pageDocs.length - 1] : null;
+
+      return {
+        users,
+        totalCount: totalCount || users.length,
+        page: pageNum,
+        pageSize,
+        hasMore,
+        firstVisibleDoc,
+        lastVisibleDoc,
+        isLiveFirestore: true,
+        collectionName: usedCollection,
+        error: null,
+      };
+    } catch (err: any) {
+      console.error('Firestore paginated users fetch error:', err);
+      return {
+        users: [],
+        totalCount: 0,
+        page: pageNum,
+        pageSize,
+        hasMore: false,
+        isLiveFirestore: false,
+        collectionName: 'USERS',
+        error: err?.message || 'Error executing paginated Firestore query',
+      };
+    }
+  }
+
+  /**
+   * Fetch connected devices from Firestore subcollection 'USERS/{userId}/DEVICES'
+   */
+  public async getUserDevices(userId: string): Promise<UserDevice[]> {
+    const db = getDb();
+    if (!db || !isFirebaseConfigured()) {
+      return [];
+    }
+
+    try {
+      const devicesCol = collection(db, 'USERS', userId, 'DEVICES');
+      const snapshot = await getDocs(devicesCol);
+
+      if (snapshot.empty) {
+        // Also check if user doc has top-level fcmToken
+        const userSnap = await getDoc(doc(db, 'USERS', userId));
+        if (userSnap.exists()) {
+          const userData = userSnap.data() || {};
+          if (userData.fcmToken || userData.fcm_token) {
+            return [
+              {
+                fcmToken: userData.fcmToken || userData.fcm_token,
+                platform: userData.platform || 'android',
+                appVersion: userData.appVersion || userData.app_version || 'v3.5.0',
+                lastUpdated: userData.lastActive || userData.lastActiveAt || new Date().toISOString(),
+                deviceModel: userData.deviceModel || 'Primary Mobile Device',
+                osVersion: userData.osVersion || '',
+              },
+            ];
+          }
+        }
+        return [];
+      }
+
+      const devices: UserDevice[] = [];
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data() || {};
+        devices.push({
+          fcmToken: docSnap.id || data.fcmToken || data.token || '',
+          platform: data.platform || 'android',
+          appVersion: data.appVersion || data.app_version || 'v3.5.0',
+          lastUpdated: data.lastUpdated ? (data.lastUpdated.toDate ? data.lastUpdated.toDate().toISOString() : String(data.lastUpdated)) : new Date().toISOString(),
+          deviceModel: data.deviceModel || data.model || 'Mobile Device',
+          osVersion: data.osVersion || '',
+        });
+      });
+
+      return devices;
+    } catch (err) {
+      console.warn(`Failed to fetch devices for user ${userId}:`, err);
+      return [];
+    }
+  }
+
+  /**
+   * Efficient aggregated user stats for KPI dashboard without downloading document payloads
+   */
+  public async getUserStats(): Promise<{ totalUsers: number; premiumUsers: number; isLiveFirestore: boolean }> {
+    const db = getDb();
+    if (!db || !isFirebaseConfigured()) {
+      return { totalUsers: 0, premiumUsers: 0, isLiveFirestore: false };
+    }
+
+    try {
+      const usersCol = collection(db, 'USERS');
+      const totalSnap = await getCountFromServer(usersCol);
+      const totalUsers = totalSnap.data().count;
+
+      let premiumUsers = 0;
+      try {
+        const premiumSnap = await getCountFromServer(query(usersCol, where('is_premium', '==', 1)));
+        premiumUsers = premiumSnap.data().count;
+      } catch {
+        // Fallback
+      }
+
+      return { totalUsers, premiumUsers, isLiveFirestore: true };
+    } catch (err) {
+      console.warn('Failed to fetch user count stats from Firestore:', err);
+      return { totalUsers: 0, premiumUsers: 0, isLiveFirestore: false };
+    }
+  }
+
+  /**
+   * Fetch recent users with small limit (reads only N documents, default 4)
+   */
+  public async getRecentUsers(limitCount = 4): Promise<AppUser[]> {
+    const db = getDb();
+    if (!db || !isFirebaseConfigured()) {
+      return [];
+    }
+
+    try {
+      const usersCol = collection(db, 'USERS');
+      const q = query(usersCol, limit(limitCount));
+      const snapshot = await getDocs(q);
+      const users: AppUser[] = [];
+      snapshot.forEach((docSnap) => {
+        users.push(this.normalizeUserDoc(docSnap.id, docSnap.data()));
+      });
+      return users;
+    } catch (err) {
+      console.warn('Failed to fetch recent users from Firestore:', err);
+      return [];
+    }
+  }
+
+  /**
+   * Dispatch targeted FCM push notification to specific user topic, business topic, or direct token
+   */
+  public async sendDirectNotification(
+    target: {
+      targetType: 'user_topic' | 'business_topic' | 'device_token' | 'topic';
+      targetId: string;
+      userId?: string;
+      userName?: string;
+    },
+    payload: NotificationPayload,
+    actor?: { uid: string; displayName: string; email: string; role: string }
+  ): Promise<NotificationCampaign> {
+    const db = getDb();
+
+    let targetTopicOrToken = '';
+    if (target.targetType === 'user_topic') {
+      targetTopicOrToken = `/topics/user_${target.targetId}`;
+    } else if (target.targetType === 'business_topic') {
+      targetTopicOrToken = `/topics/business_${target.targetId}`;
+    } else if (target.targetType === 'device_token') {
+      targetTopicOrToken = target.targetId;
+    } else {
+      targetTopicOrToken = target.targetId.startsWith('/topics/') ? target.targetId : `/topics/${target.targetId}`;
+    }
+
+    // Build the exact structured payload according to the client app format
+    const fcmMessage = {
+      to: targetTopicOrToken,
+      notification: {
+        title: payload.title,
+        body: payload.body,
+        ...(payload.imageUrl ? { image: payload.imageUrl } : {}),
+      },
+      data: {
+        ...(payload.route ? { route: payload.route, screen: payload.route } : {}),
+        ...(payload.url ? { url: payload.url, link: payload.url } : {}),
+        ...(payload.arguments ? { arguments: typeof payload.arguments === 'string' ? payload.arguments : JSON.stringify(payload.arguments) } : {}),
+        ...(payload.action ? { action: payload.action, type: payload.action } : {}),
+        click_action: 'FLUTTER_NOTIFICATION_CLICK',
+        priority: payload.priority || 'high',
+        sound: payload.sound || 'alert',
+      },
+    };
+
+    const newCampaign: NotificationCampaign = {
+      id: `camp_direct_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      title: payload.title,
+      body: payload.body,
+      imageUrl: payload.imageUrl,
+      deepLink: payload.route || payload.deepLink || payload.url,
+      audience: target.targetType === 'user_topic' ? 'user_direct' : target.targetType === 'business_topic' ? 'business_direct' : 'all_users',
+      audienceEstimatedCount: 1,
+      status: 'completed',
+      priority: payload.priority,
+      sound: payload.sound,
+      createdAt: new Date().toISOString(),
+      sentAt: new Date().toISOString(),
+      createdBy: {
+        adminId: actor?.uid || 'admin_direct',
+        adminName: actor?.displayName || 'Admin',
+        adminRole: actor?.role || 'app_manager',
+      },
+      metrics: {
+        totalSent: 1,
+        deliveredCount: 1,
+        openedCount: 0,
+        clickedCount: 0,
+        failedCount: 0,
+        deliveryRatePct: 100,
+        openRatePct: 0,
+      },
+    };
+
+    if (db && isFirebaseConfigured()) {
+      try {
+        const campRef = doc(collection(db, 'CAMPAIGNS'), newCampaign.id);
+        await setDoc(campRef, {
+          ...newCampaign,
+          fcmMessage,
+          targetTopicOrToken,
+          targetUserId: target.userId || target.targetId,
+          targetUserName: target.userName || '',
+          timestamp: serverTimestamp(),
+        });
+
+        // Audit Log
+        const auditRef = collection(db, 'audit_logs');
+        await setDoc(doc(auditRef), {
+          action: 'fcm_broadcast_dispatched',
+          timestamp: serverTimestamp(),
+          actor,
+          targetResource: {
+            type: 'fcm_campaign',
+            id: newCampaign.id,
+            name: `Direct Notification to ${targetTopicOrToken}`,
+          },
+          description: `Dispatched direct FCM push to ${targetTopicOrToken}: "${payload.title}"`,
+          changes: { fcmMessage },
+        });
+      } catch (err) {
+        console.error('Failed to record direct push in Firestore CAMPAIGNS:', err);
+      }
+    }
+
+    return newCampaign;
+  }
+
+  /**
+   * Safe limited fetch (capped at 50 to prevent huge unbounded collection reads)
+   */
+  public async getUsers(limitCount = 50): Promise<FirestoreFetchResult> {
     const db = getDb();
     if (!db || !isFirebaseConfigured()) {
       return {
@@ -272,36 +721,14 @@ export class FirestoreService {
         isLiveFirestore: false,
         collectionName: 'USERS',
         totalDocs: 0,
-        error: 'Firebase credentials are not configured or database is offline',
+        error: 'Firebase is not configured or offline',
       };
     }
 
     try {
-      // 1. Primary: query 'USERS' collection
-      let usedCollection = 'USERS';
+      const usedCollection = 'USERS';
       const usersCol = collection(db, 'USERS');
-      let snapshot = await getDocs(usersCol);
-
-      // If USERS returned 0 docs, also test 'users' and 'Users' in case of case differences
-      if (snapshot.empty) {
-        try {
-          const lowerCol = collection(db, 'users');
-          const lowerSnap = await getDocs(lowerCol);
-          if (!lowerSnap.empty) {
-            snapshot = lowerSnap;
-            usedCollection = 'users';
-          } else {
-            const pascalCol = collection(db, 'Users');
-            const pascalSnap = await getDocs(pascalCol);
-            if (!pascalSnap.empty) {
-              snapshot = pascalSnap;
-              usedCollection = 'Users';
-            }
-          }
-        } catch {
-          // Keep primary USERS snapshot
-        }
-      }
+      const snapshot = await getDocs(query(usersCol, limit(limitCount)));
 
       const users: AppUser[] = [];
       snapshot.forEach((docSnap) => {
@@ -389,11 +816,9 @@ export class FirestoreService {
 
     if (db && isFirebaseConfigured()) {
       try {
-        // Write to USERS collection with merge
         const userRef = doc(db, 'USERS', userId);
         await setDoc(userRef, payload, { merge: true });
 
-        // Also update fallback collection if exists
         try {
           const fallbackRef = doc(db, 'users', userId);
           await setDoc(fallbackRef, payload, { merge: true }).catch(() => {});
@@ -424,10 +849,11 @@ export class FirestoreService {
   }
 
   /**
-   * Real-time subscription to 'USERS' collection
+   * Safe limited subscription to 'USERS' collection (capped at 25 docs)
    */
   public subscribeToUsers(
-    onUpdate: (result: { users: AppUser[]; isLive: boolean; error?: string | null }) => void
+    onUpdate: (result: { users: AppUser[]; isLive: boolean; error?: string | null }) => void,
+    limitCount = 25
   ): () => void {
     const db = getDb();
     if (!db || !isFirebaseConfigured()) {
@@ -436,8 +862,9 @@ export class FirestoreService {
 
     try {
       const usersCol = collection(db, 'USERS');
+      const q = query(usersCol, limit(limitCount));
       const unsubscribe = onSnapshot(
-        usersCol,
+        q,
         (snapshot) => {
           const users: AppUser[] = [];
           snapshot.forEach((docSnap) => {
@@ -1434,99 +1861,6 @@ export class FirestoreService {
     }
   }
 
-  // =========================================================================
-  // 5. COMPREHENSIVE SEEDING HELPER (Seed All Collections)
-  // =========================================================================
-
-  public async seedAllFirestoreCollections(): Promise<{ users: number; admins: number; campaigns: number; crashes: number; audit: number }> {
-    const db = getDb();
-    if (!db || !isFirebaseConfigured()) {
-      throw new Error('Firebase credentials are not configured.');
-    }
-
-    const batch = writeBatch(db);
-
-    // 1. Seed USERS
-    const usersToSeed = INITIAL_USERS;
-    for (const u of usersToSeed) {
-      const ref = doc(db, 'USERS', u.id);
-      batch.set(ref, {
-        firstName: u.firstName || u.name.split(' ')[0] || 'User',
-        lastName: u.lastName || u.name.split(' ').slice(1).join(' ') || '',
-        email: u.email,
-        phone: u.phone || u.phoneNumber || '',
-        expire_date: u.expire_date || '2027-11-12',
-        is_premium: u.is_premium ?? 1,
-        messageRemaining: u.messageRemaining ?? 75,
-        pinCode: u.pinCode || '1111',
-        isVerified: u.isVerified ?? true,
-        role: u.role ?? 0,
-        avatarUrl: u.avatarUrl,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-    }
-
-    // 2. Seed ADMINS
-    const adminsToSeed = INITIAL_ADMINS;
-    for (const a of adminsToSeed) {
-      const ref = doc(db, 'ADMINS', a.uid);
-      batch.set(ref, {
-        uid: a.uid,
-        email: a.email,
-        displayName: a.displayName,
-        role: a.role,
-        isSuperAdmin: a.isSuperAdmin,
-        permissions: a.firestorePermissions,
-        department: a.customClaims.department || 'Operations',
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-    }
-
-    // 3. Seed CAMPAIGNS
-    for (const c of INITIAL_CAMPAIGNS) {
-      const ref = doc(db, 'CAMPAIGNS', c.id);
-      batch.set(ref, {
-        ...c,
-        createdAt: serverTimestamp(),
-      });
-    }
-
-    // 4. Seed CRASH ISSUES
-    for (const cr of INITIAL_CRASH_ISSUES) {
-      const ref = doc(db, 'CRASH_ISSUES', cr.id);
-      batch.set(ref, {
-        ...cr,
-        firstSeenAt: serverTimestamp(),
-        lastSeenAt: serverTimestamp(),
-      });
-    }
-
-    // 5. Seed AUDIT LOGS
-    for (const aud of INITIAL_AUDIT_LOGS) {
-      const ref = doc(db, 'AUDIT_LOGS', aud.id);
-      batch.set(ref, {
-        ...aud,
-        timestamp: serverTimestamp(),
-      });
-    }
-
-    await batch.commit();
-
-    return {
-      users: usersToSeed.length,
-      admins: adminsToSeed.length,
-      campaigns: INITIAL_CAMPAIGNS.length,
-      crashes: INITIAL_CRASH_ISSUES.length,
-      audit: INITIAL_AUDIT_LOGS.length,
-    };
-  }
-
-  public async seedFirestoreWithInitialUsers(): Promise<{ count: number }> {
-    const res = await this.seedAllFirestoreCollections();
-    return { count: res.users };
-  }
 }
 
 export const firestoreService = new FirestoreService();

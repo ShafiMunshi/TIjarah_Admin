@@ -41,6 +41,46 @@ export interface AppUser {
   usedStorageMb: number;
 }
 
+export interface UserDevice {
+  fcmToken: string;
+  platform: 'android' | 'ios' | 'web' | string;
+  appVersion?: string;
+  lastUpdated?: string;
+  deviceModel?: string;
+  osVersion?: string;
+}
+
+export interface UserQueryOptions {
+  pageSize?: number;
+  cursorDoc?: any; // QueryDocumentSnapshot or null
+  direction?: 'next' | 'prev' | 'first';
+  sortField?: keyof AppUser | string;
+  sortOrder?: 'asc' | 'desc';
+  searchQuery?: string;
+  searchField?: 'all' | 'email' | 'name' | 'phone' | 'id';
+  nameSearch?: string;
+  emailSearch?: string;
+  phoneSearch?: string;
+  userIdSearch?: string;
+  premiumFilter?: 'all' | 'premium' | 'free';
+  verifiedFilter?: 'all' | 'verified' | 'unverified';
+  createdFrom?: string;
+  createdTo?: string;
+}
+
+export interface PaginatedUsersResult {
+  users: AppUser[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  hasMore: boolean;
+  firstVisibleDoc?: any | null;
+  lastVisibleDoc?: any | null;
+  isLiveFirestore: boolean;
+  collectionName: string;
+  error?: string | null;
+}
+
 export interface UserFilters {
   searchQuery: string;
   tier: 'all' | 'premium' | 'free';
@@ -50,3 +90,4 @@ export interface UserFilters {
   page: number;
   perPage: number;
 }
+

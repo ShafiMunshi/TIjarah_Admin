@@ -3,7 +3,6 @@ import {
   X,
   Flame,
   Check,
-  UploadCloud,
 } from 'lucide-react';
 import {
   getStoredFirebaseConfig,
@@ -37,7 +36,6 @@ export const FirebaseConfigModal: React.FC<FirebaseConfigModalProps> = ({
   });
 
   const [rawJson, setRawJson] = useState('');
-  const [isSeeding, setIsSeeding] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string; count?: number } | null>(null);
@@ -154,22 +152,6 @@ export const FirebaseConfigModal: React.FC<FirebaseConfigModalProps> = ({
     }
   };
 
-  const handleSeedFirestore = async () => {
-    setIsSeeding(true);
-    try {
-      const result = await firestoreService.seedAllFirestoreCollections();
-      showSuccess(
-        'Firestore Collections Populated!',
-        `Synced: ${result.users} Users, ${result.admins} Admins, ${result.campaigns} Campaigns, ${result.crashes} Crash Issues, ${result.audit} Audit Logs`
-      );
-      if (onConfigChanged) onConfigChanged();
-    } catch (err: any) {
-      showError('Seed Failed', err.message);
-    } finally {
-      setIsSeeding(false);
-    }
-  };
-
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" style={{ maxWidth: '720px' }} onClick={(e) => e.stopPropagation()}>
@@ -229,20 +211,9 @@ export const FirebaseConfigModal: React.FC<FirebaseConfigModalProps> = ({
             </div>
 
             {isConnected && (
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button
-                  className="btn btn-secondary btn-sm"
-                  onClick={handleSeedFirestore}
-                  disabled={isSeeding}
-                  title="Upload initial user schemas to your Firestore collection"
-                >
-                  <UploadCloud size={14} />
-                  <span>{isSeeding ? 'Writing to Firestore...' : 'Seed Firestore Users'}</span>
-                </button>
-                <button className="btn btn-danger btn-sm" onClick={handleDisconnect}>
-                  Disconnect
-                </button>
-              </div>
+              <button className="btn btn-danger btn-sm" onClick={handleDisconnect}>
+                Disconnect
+              </button>
             )}
           </div>
 

@@ -31,6 +31,11 @@ export const NotificationCenterView: React.FC = () => {
   const [body, setBody] = useState('Limited time weekend coupon available for local merchants. Tap to claim before midnight.');
   const [imageUrl, setImageUrl] = useState('https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=600&auto=format&fit=crop&q=80');
   const [deepLink, setDeepLink] = useState('tijarah://promotions/flash_30');
+  const [route, setRoute] = useState('/products');
+  const [customRoute, setCustomRoute] = useState('');
+  const [externalUrl, setExternalUrl] = useState('');
+  const [customArguments, setCustomArguments] = useState('');
+  const [actionTag, setActionTag] = useState('promotion');
   const [selectedAudience, setSelectedAudience] = useState<TargetAudience>('all_users');
   const [priority, setPriority] = useState<NotificationPriority>('high');
   const [sound, setSound] = useState<'default' | 'alert' | 'silent'>('alert');
@@ -61,6 +66,8 @@ export const NotificationCenterView: React.FC = () => {
     };
   }, []);
 
+  const effectiveRoute = route === 'custom' ? customRoute.trim() : route;
+
   const handleSendBroadcast = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -74,6 +81,16 @@ export const NotificationCenterView: React.FC = () => {
       return;
     }
 
+    let parsedArgs: any = undefined;
+    if (customArguments.trim()) {
+      try {
+        parsedArgs = JSON.parse(customArguments);
+      } catch (_jsonErr) {
+        showError('Invalid JSON Arguments', 'Please check the JSON syntax for Custom Arguments');
+        return;
+      }
+    }
+
     setIsSending(true);
 
     try {
@@ -82,7 +99,7 @@ export const NotificationCenterView: React.FC = () => {
           title,
           body,
           imageUrl: imageUrl.trim() || undefined,
-          deepLink: deepLink.trim() || undefined,
+          deepLink: effectiveRoute || externalUrl.trim() || deepLink.trim() || undefined,
           audience: selectedAudience,
           audienceEstimatedCount: activeSegmentDef.estimatedCount,
           priority,
@@ -97,6 +114,9 @@ export const NotificationCenterView: React.FC = () => {
           role: role,
         }
       );
+      if (parsedArgs) {
+        console.log('FCM Custom Arguments attached to campaign:', parsedArgs, actionTag);
+      }
 
       const latest = await firestoreService.getCampaigns();
       setCampaigns(latest.campaigns);
@@ -110,6 +130,8 @@ export const NotificationCenterView: React.FC = () => {
       setBody('');
       setImageUrl('');
       setDeepLink('');
+      setExternalUrl('');
+      setCustomArguments('');
       setActiveTab('history');
     } catch (err: any) {
       showError('Broadcast failed', err.message);
@@ -223,11 +245,39 @@ export const NotificationCenterView: React.FC = () => {
                 />
               </div>
 
-              {/* Rich Media & Deep Link */}
+              {/* Client App Route / Screen & Deep Link */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                 <div className="form-group">
                   <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <ImageIcon size={14} /> Image Attachment URL (Optional)
+                    <Link2 size={14} /> 4. Client App Screen (Route)
+                  </label>
+                  <select
+                    className="form-select"
+                    value={route}
+                    onChange={(e) => setRoute(e.target.value)}
+                  >
+                    <option value="/products">📦 Products Catalog (/products)</option>
+                    <option value="due-book">📒 Due Payment Book (due-book)</option>
+                    <option value="/app-access">🔐 App Access / Login (/app-access)</option>
+                    <option value="/orders">🛒 Orders View (/orders)</option>
+                    <option value="/settings">⚙️ Settings Screen (/settings)</option>
+                    <option value="custom">✏️ Custom Route URI...</option>
+                  </select>
+                  {route === 'custom' && (
+                    <input
+                      type="text"
+                      className="form-input"
+                      style={{ marginTop: '8px' }}
+                      placeholder="e.g. /custom-path"
+                      value={customRoute}
+                      onChange={(e) => setCustomRoute(e.target.value)}
+                    />
+                  )}
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <ImageIcon size={14} /> 5. Image Attachment URL (Optional)
                   </label>
                   <input
                     type="url"
@@ -237,19 +287,46 @@ export const NotificationCenterView: React.FC = () => {
                     onChange={(e) => setImageUrl(e.target.value)}
                   />
                 </div>
+              </div>
 
+              {/* External Web Link & Custom JSON Arguments */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                 <div className="form-group">
-                  <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <Link2 size={14} /> In-App Deep Link URI (Optional)
-                  </label>
+                  <label className="form-label">6. External Web URL (Optional)</label>
                   <input
-                    type="text"
+                    type="url"
                     className="form-input"
-                    placeholder="tijarah://catalogs/..."
-                    value={deepLink}
-                    onChange={(e) => setDeepLink(e.target.value)}
+                    placeholder="https://tijarah.app/news"
+                    value={externalUrl}
+                    onChange={(e) => setExternalUrl(e.target.value)}
                   />
                 </div>
+
+                <div className="form-group">
+                  <label className="form-label">7. Action Tag / Type</label>
+                  <select
+                    className="form-select"
+                    value={actionTag}
+                    onChange={(e) => setActionTag(e.target.value)}
+                  >
+                    <option value="promotion">promotion</option>
+                    <option value="force_update">force_update</option>
+                    <option value="due_reminder">due_reminder</option>
+                    <option value="announcement">announcement</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">8. Custom Arguments (JSON format, e.g. {`{"filter": "unpaid"}`})</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }}
+                  placeholder='{"filter": "unpaid"}'
+                  value={customArguments}
+                  onChange={(e) => setCustomArguments(e.target.value)}
+                />
               </div>
 
               {/* Advanced Controls */}

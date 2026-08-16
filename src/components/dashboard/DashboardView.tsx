@@ -27,18 +27,21 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
   const { role, currentAdmin } = useAuth();
   const roleDef = role !== 'unauthorized' ? ROLE_DEFINITIONS[role] : null;
 
-  const [users, setUsers] = useState<AppUser[]>([]);
+  const [recentUsers, setRecentUsers] = useState<AppUser[]>([]);
+  const [totalUsersCount, setTotalUsersCount] = useState<number>(0);
+  const [premiumUsersCount, setPremiumUsersCount] = useState<number>(0);
   const [campaigns, setCampaigns] = useState<NotificationCampaign[]>([]);
   const [crashes, setCrashes] = useState<CrashIssue[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
 
   useEffect(() => {
-    // 1. Live USERS
-    firestoreService.getUsers().then((res) => {
-      setUsers(res.users);
+    // 1. Efficient user statistics & top recent users (Zero full collection downloads)
+    firestoreService.getUserStats().then((stats) => {
+      setTotalUsersCount(stats.totalUsers);
+      setPremiumUsersCount(stats.premiumUsers);
     });
-    const unsubUsers = firestoreService.subscribeToUsers((res) => {
-      setUsers(res.users);
+    firestoreService.getRecentUsers(4).then((list) => {
+      setRecentUsers(list);
     });
 
     // 2. Live CAMPAIGNS
@@ -60,14 +63,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
     const unsubAudit = firestoreService.subscribeToAuditLogs((list) => setAuditLogs(list));
 
     return () => {
-      unsubUsers();
       unsubCampaigns();
       unsubCrashes();
       unsubAudit();
     };
   }, []);
 
-  const proCount = users.filter((u) => u.is_premium === 1 || u.tier === 'pro' || u.tier === 'enterprise').length;
   const openCrashesCount = crashes.filter((c) => c.status === 'open' || c.status === 'investigating').length;
   const totalDelivered = campaigns.reduce((acc, c) => acc + (c.metrics?.deliveredCount || 0), 0);
 
@@ -136,9 +137,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
             </div>
           ) : (
             <>
-              <div className="metric-stat-value">{users.length > 0 ? users.length.toLocaleString() : '184,520'}</div>
+              <div className="metric-stat-value">{totalUsersCount > 0 ? totalUsersCount.toLocaleString() : '184,520'}</div>
               <div className="metric-stat-sub" style={{ color: 'var(--status-success)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <TrendingUp size={13} /> Live Firestore USERS ({proCount} Premium)
+                <TrendingUp size={13} /> Live Firestore Count ({premiumUsersCount} Premium)
               </div>
             </>
           )}
@@ -154,9 +155,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
           </div>
           {role === 'super_admin' ? (
             <>
-              <div className="metric-stat-value">${(proCount * 29 + 120000).toLocaleString()}</div>
+              <div className="metric-stat-value">${(premiumUsersCount * 29 + 120000).toLocaleString()}</div>
               <div className="metric-stat-sub" style={{ color: 'var(--status-success)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <TrendingUp size={13} /> Calculated from {proCount} active subscriptions
+                <TrendingUp size={13} /> Calculated from {premiumUsersCount} active subscriptions
               </div>
             </>
           ) : (
@@ -275,13 +276,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
               </div>
             )
           ) : (
-            users.length === 0 ? (
+            recentUsers.length === 0 ? (
               <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
                 No user documents found in Firestore USERS collection.
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                {users.slice(0, 4).map((user) => (
+                {recentUsers.map((user) => (
                   <div
                     key={user.id}
                     style={{
