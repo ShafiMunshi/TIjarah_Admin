@@ -265,7 +265,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
                     <div style={{ maxWidth: '75%' }}>
                       <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>{camp.title}</div>
                       <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>
-                        Audience: {camp.audience.replace(/_/g, ' ').toUpperCase()} • {camp.metrics.deliveredCount.toLocaleString()} delivered
+                        Audience: {camp.audience.replace(/_/g, ' ').toUpperCase()} • {camp.metrics?.deliveredCount?.toLocaleString() ?? 1} delivered
                       </div>
                     </div>
                     <span className={`badge ${camp.status === 'completed' ? 'badge-success' : 'badge-warning'}`}>

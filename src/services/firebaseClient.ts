@@ -3,6 +3,8 @@ import type { FirebaseApp } from 'firebase/app';
 import { getFirestore, Firestore } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import type { Auth } from 'firebase/auth';
+import { getFunctions } from 'firebase/functions';
+import type { Functions } from 'firebase/functions';
 
 export interface FirebaseConfigOptions {
   apiKey: string;
@@ -55,12 +57,18 @@ export function saveStoredFirebaseConfig(config: FirebaseConfigOptions | null) {
 let appInstance: FirebaseApp | null = null;
 let dbInstance: Firestore | null = null;
 let authInstance: Auth | null = null;
+let functionsInstance: Functions | null = null;
 
-export function initFirebase(customConfig?: FirebaseConfigOptions): { app: FirebaseApp | null; db: Firestore | null; auth: Auth | null } {
+export function initFirebase(customConfig?: FirebaseConfigOptions): {
+  app: FirebaseApp | null;
+  db: Firestore | null;
+  auth: Auth | null;
+  functions: Functions | null;
+} {
   const config = customConfig || getStoredFirebaseConfig();
 
   if (!config || !config.apiKey || !config.projectId) {
-    return { app: null, db: null, auth: null };
+    return { app: null, db: null, auth: null, functions: null };
   }
 
   try {
@@ -72,11 +80,17 @@ export function initFirebase(customConfig?: FirebaseConfigOptions): { app: Fireb
 
     dbInstance = getFirestore(appInstance);
     authInstance = getAuth(appInstance);
+    functionsInstance = getFunctions(appInstance);
 
-    return { app: appInstance, db: dbInstance, auth: authInstance };
+    return {
+      app: appInstance,
+      db: dbInstance,
+      auth: authInstance,
+      functions: functionsInstance,
+    };
   } catch (error) {
     console.error('Error initializing Firebase SDK:', error);
-    return { app: null, db: null, auth: null };
+    return { app: null, db: null, auth: null, functions: null };
   }
 }
 
@@ -100,4 +114,11 @@ export function getFirebaseAuth(): Auth | null {
     initFirebase();
   }
   return authInstance;
+}
+
+export function getFirebaseFunctions(): Functions | null {
+  if (!functionsInstance && isFirebaseConfigured()) {
+    initFirebase();
+  }
+  return functionsInstance;
 }

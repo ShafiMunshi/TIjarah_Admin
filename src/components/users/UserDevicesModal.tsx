@@ -8,7 +8,6 @@ import {
   KeyRound,
   Copy,
   Check,
-  Send,
   Loader2,
 } from 'lucide-react';
 import type { AppUser, UserDevice } from '../../types/users';
@@ -19,14 +18,12 @@ interface UserDevicesModalProps {
   user: AppUser | null;
   isOpen: boolean;
   onClose: () => void;
-  onSendNotificationToUser: (user: AppUser) => void;
 }
 
 export const UserDevicesModal: React.FC<UserDevicesModalProps> = ({
   user,
   isOpen,
   onClose,
-  onSendNotificationToUser,
 }) => {
   const { showSuccess } = useToast();
   const [devices, setDevices] = useState<UserDevice[]>([]);
@@ -113,21 +110,15 @@ export const UserDevicesModal: React.FC<UserDevicesModalProps> = ({
           >
             <div>
               <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                Direct Target Channel: <code>/topics/user_{user.id}</code>
+                Registered FCM Hardware Tokens for User ID: <code>{user.id}</code>
               </div>
               <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>
-                Auto-subscribed upon login in Client App <code>notification_repository.dart</code>
+                Synced automatically from client app login session
               </div>
             </div>
-            <button
-              className="btn btn-primary btn-sm"
-              onClick={() => {
-                onClose();
-                onSendNotificationToUser(user);
-              }}
-            >
-              <Send size={13} /> Send Push to User
-            </button>
+            <span className="badge badge-neutral" style={{ fontSize: '0.75rem' }}>
+              {devices.length} Active {devices.length === 1 ? 'Device' : 'Devices'}
+            </span>
           </div>
 
           {isLoading ? (

@@ -26,7 +26,7 @@ import type { User as FirebaseUser } from 'firebase/auth';
 import { getDb, getFirebaseAuth, isFirebaseConfigured } from './firebaseClient';
 import type { AppUser, SubscriptionTier, UserDevice, UserQueryOptions, PaginatedUsersResult } from '../types/users';
 import type { AdminUser, AdminRole, Permission, FirestoreAdminPermissions } from '../types/auth';
-import type { NotificationCampaign, TargetAudience, NotificationPriority, NotificationPayload } from '../types/notifications';
+import type { NotificationCampaign, TargetAudience, NotificationPriority, NotificationPayload, CampaignStatus } from '../types/notifications';
 import type { CrashIssue, CrashStatus } from '../types/crashlytics';
 import type { AuditLogEntry, AuditActionType } from '../types/audit';
 import { ROLE_DEFINITIONS } from '../types/auth';
@@ -1425,9 +1425,8 @@ export class FirestoreService {
       return String(val);
     };
 
-    const estCount = Number(data.audienceEstimatedCount || data.audience_count || 1000);
-    const delivered = Number(data.metrics?.deliveredCount || Math.floor(estCount * 0.98));
-    const opened = Number(data.metrics?.openedCount || data.metrics?.openCount || Math.floor(estCount * 0.42));
+    const status = (data.status || 'sent_to_fcm') as CampaignStatus;
+    const isAccepted = Boolean(data.fcmAccepted ?? (status === 'sent_to_fcm' || status === 'completed'));
 
     return {
       id,
@@ -1436,26 +1435,25 @@ export class FirestoreService {
       imageUrl: data.imageUrl || data.image_url,
       deepLink: data.deepLink || data.deep_link,
       audience: (data.audience || 'all_users') as TargetAudience,
-      audienceEstimatedCount: estCount,
+      audienceEstimatedCount: Number(data.audienceEstimatedCount || 1),
       priority: (data.priority || 'high') as NotificationPriority,
-      sound: data.sound || 'default',
-      status: data.status || 'completed',
+      sound: data.sound || 'alert',
+      status,
+      fcmAccepted: isAccepted,
+      fcmMessageId: data.fcmMessageId || data.fcmMessage?.name,
+      fcmError: data.fcmError,
       createdAt: parseDate(data.createdAt || data.created_at),
       sentAt: data.sentAt ? parseDate(data.sentAt) : undefined,
       scheduledFor: data.scheduledFor ? parseDate(data.scheduledFor) : undefined,
       createdBy: data.createdBy || {
-        adminId: data.author?.uid || 'marketing_admin',
-        adminName: data.author?.displayName || 'Marketing Admin',
+        adminId: data.author?.uid || 'admin',
+        adminName: data.author?.displayName || 'Admin',
         adminRole: data.author?.role || 'marketing_admin',
       },
       metrics: {
-        totalSent: Number(data.metrics?.totalSent || data.metrics?.sentCount || estCount),
-        deliveredCount: delivered,
-        openedCount: opened,
-        clickedCount: Number(data.metrics?.clickedCount || data.metrics?.conversionCount || 85),
-        failedCount: Number(data.metrics?.failedCount || 12),
-        deliveryRatePct: Number(data.metrics?.deliveryRatePct || 98.2),
-        openRatePct: Number(data.metrics?.openRatePct || 42.8),
+        totalSent: Number(data.metrics?.totalSent ?? (isAccepted ? 1 : 0)),
+        fcmAcceptedCount: Number(data.metrics?.fcmAcceptedCount ?? (isAccepted ? 1 : 0)),
+        failedCount: Number(data.metrics?.failedCount ?? (status === 'failed' ? 1 : 0)),
       },
     };
   }

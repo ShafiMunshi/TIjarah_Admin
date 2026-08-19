@@ -4,16 +4,18 @@ import {
   Clock,
   Image as ImageIcon,
   Link2,
-  Crown,
-  TrendingUp,
-  Shield,
   Database,
   Loader2,
+  Globe,
+  Radio,
+  Code,
+  CheckCircle,
+  AlertCircle,
 } from 'lucide-react';
-import type { TargetAudience, NotificationPriority, NotificationCampaign } from '../../types/notifications';
-import { AUDIENCE_SEGMENTS } from '../../types/notifications';
+import type { NotificationPriority, NotificationCampaign } from '../../types/notifications';
 import { useAuth } from '../../context/AuthContext';
 import { firestoreService } from '../../services/firestoreService';
+import { fcmRestService } from '../../services/fcmRestService';
 import { useToast } from '../../context/ToastContext';
 import { MobilePreview } from './MobilePreview';
 
@@ -30,23 +32,23 @@ export const NotificationCenterView: React.FC = () => {
   const [title, setTitle] = useState('🔥 Flash Deal: 30% Off Your Favorite Boutiques!');
   const [body, setBody] = useState('Limited time weekend coupon available for local merchants. Tap to claim before midnight.');
   const [imageUrl, setImageUrl] = useState('https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=600&auto=format&fit=crop&q=80');
-  const [deepLink, setDeepLink] = useState('tijarah://promotions/flash_30');
   const [route, setRoute] = useState('/products');
   const [customRoute, setCustomRoute] = useState('');
   const [externalUrl, setExternalUrl] = useState('');
   const [customArguments, setCustomArguments] = useState('');
   const [actionTag, setActionTag] = useState('promotion');
-  const [selectedAudience, setSelectedAudience] = useState<TargetAudience>('all_users');
   const [priority, setPriority] = useState<NotificationPriority>('high');
   const [sound, setSound] = useState<'default' | 'alert' | 'silent'>('alert');
   const [scheduleLater, setScheduleLater] = useState(false);
   const [scheduledDate, setScheduledDate] = useState('');
   const [isSending, setIsSending] = useState(false);
 
+  // Wire Preview Modal/Accordion
+  const [showWirePreview, setShowWirePreview] = useState(false);
+  const [lastResponse, setLastResponse] = useState<any>(null);
+
   const canCompose = hasPermission('fcm:compose');
   const canBroadcast = hasPermission('fcm:broadcast');
-
-  const activeSegmentDef = AUDIENCE_SEGMENTS.find((s) => s.id === selectedAudience) || AUDIENCE_SEGMENTS[0];
 
   useEffect(() => {
     firestoreService.getCampaigns().then((res) => {
@@ -68,6 +70,19 @@ export const NotificationCenterView: React.FC = () => {
 
   const effectiveRoute = route === 'custom' ? customRoute.trim() : route;
 
+  // Real-time wire payload preview for topic 'all_users'
+  const wirePreview = fcmRestService.buildV1WirePayload({
+    title,
+    body,
+    imageUrl: imageUrl.trim() || undefined,
+    route: effectiveRoute || undefined,
+    url: externalUrl.trim() || undefined,
+    arguments: customArguments.trim() ? customArguments.trim() : undefined,
+    action: actionTag,
+    priority,
+    sound,
+  });
+
   const handleSendBroadcast = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -85,7 +100,7 @@ export const NotificationCenterView: React.FC = () => {
     if (customArguments.trim()) {
       try {
         parsedArgs = JSON.parse(customArguments);
-      } catch (_jsonErr) {
+      } catch {
         showError('Invalid JSON Arguments', 'Please check the JSON syntax for Custom Arguments');
         return;
       }
@@ -94,47 +109,56 @@ export const NotificationCenterView: React.FC = () => {
     setIsSending(true);
 
     try {
-      await firestoreService.createCampaign(
+      const result = await fcmRestService.sendBroadcast(
         {
-          title,
-          body,
+          title: title.trim(),
+          body: body.trim(),
           imageUrl: imageUrl.trim() || undefined,
-          deepLink: effectiveRoute || externalUrl.trim() || deepLink.trim() || undefined,
-          audience: selectedAudience,
-          audienceEstimatedCount: activeSegmentDef.estimatedCount,
+          route: effectiveRoute || undefined,
+          url: externalUrl.trim() || undefined,
+          arguments: parsedArgs || (customArguments.trim() ? customArguments.trim() : undefined),
+          action: actionTag,
           priority,
           sound,
           scheduleLater,
           scheduledFor: scheduleLater ? scheduledDate : undefined,
         },
         {
-          uid: currentAdmin?.uid || 'mkt_admin',
-          displayName: currentAdmin?.displayName || 'Marketing Admin',
-          email: currentAdmin?.email || 'mkt@tijarah.app',
+          uid: currentAdmin?.uid || 'admin',
+          displayName: currentAdmin?.displayName || 'Admin',
+          email: currentAdmin?.email || 'admin@tijarah.app',
           role: role,
         }
       );
-      if (parsedArgs) {
-        console.log('FCM Custom Arguments attached to campaign:', parsedArgs, actionTag);
-      }
+
+      console.log('RESPONSE:', result);
+      setLastResponse(result);
 
       const latest = await firestoreService.getCampaigns();
       setCampaigns(latest.campaigns);
-      showSuccess(
-        scheduleLater ? 'Notification Scheduled in Firestore' : 'FCM Push Broadcast Dispatched & Saved in CAMPAIGNS Collection!',
-        `Targeted ${activeSegmentDef.estimatedCount.toLocaleString()} active mobile tokens`
-      );
+
+      if (scheduleLater) {
+        showSuccess(
+          'Notification Scheduled',
+          `Broadcast to all APK users queued for ${scheduledDate}`
+        );
+      } else {
+        showSuccess(
+          'Notification Sent Successfully',
+          `Audience: All Users | Topic: all_users | Message ID: ${result.messageId || 'Confirmed'}`
+        );
+      }
 
       // Reset form
       setTitle('');
       setBody('');
       setImageUrl('');
-      setDeepLink('');
       setExternalUrl('');
       setCustomArguments('');
       setActiveTab('history');
     } catch (err: any) {
-      showError('Broadcast failed', err.message);
+      console.error('RESPONSE ERROR:', err);
+      showError('Notification Failed to Send', err.message || 'FCM rejected the message');
     } finally {
       setIsSending(false);
     }
@@ -142,17 +166,22 @@ export const NotificationCenterView: React.FC = () => {
 
   return (
     <div>
+      {/* Top Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
             <h1 style={{ fontSize: '1.5rem', fontWeight: 700 }}>FCM Push Notification Center</h1>
             <span className={`badge ${isLive ? 'badge-success' : 'badge-neutral'}`} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
               <Database size={12} />
-              <span>{isLive ? `Live Firestore: CAMPAIGNS (${campaigns.length} campaigns)` : 'Local Cache'}</span>
+              <span>{isLive ? `Live Firestore: CAMPAIGNS (${campaigns.length})` : 'Local Mode'}</span>
+            </span>
+            <span className="badge badge-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+              <Radio size={12} />
+              <span>Broadcast Mode: All APK Users (/topics/all_users)</span>
             </span>
           </div>
           <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
-            Compose and broadcast high-priority push campaigns to iOS APNs and Android FCM tokens without exposing individual PII
+            Securely broadcast push notifications to all users who installed the APK via Firebase Cloud Functions and Firebase Admin SDK
           </p>
         </div>
 
@@ -161,16 +190,128 @@ export const NotificationCenterView: React.FC = () => {
             className={`btn btn-sm ${activeTab === 'composer' ? 'btn-primary' : 'btn-secondary'}`}
             onClick={() => setActiveTab('composer')}
           >
-            <Send size={15} /> Compose Campaign
+            <Send size={15} /> Compose Broadcast
           </button>
           <button
             className={`btn btn-sm ${activeTab === 'history' ? 'btn-primary' : 'btn-secondary'}`}
             onClick={() => setActiveTab('history')}
           >
-            <Clock size={15} /> Dispatched History ({campaigns.length})
+            <Clock size={15} /> History ({campaigns.length})
+          </button>
+          <button
+            className={`btn btn-sm ${showWirePreview ? 'btn-primary' : 'btn-outline'}`}
+            onClick={() => setShowWirePreview(!showWirePreview)}
+            title="Inspect Wire Payload"
+          >
+            <Code size={15} /> Wire Payload
           </button>
         </div>
       </div>
+
+      {/* Wire Payload Inspector (Toggleable) */}
+      {showWirePreview && (
+        <div
+          className="card"
+          style={{
+            marginBottom: '20px',
+            border: '1px solid var(--accent-primary)',
+            background: 'var(--bg-surface)',
+          }}
+        >
+          <div className="card-header" style={{ paddingBottom: '8px' }}>
+            <div className="card-title" style={{ fontSize: '0.95rem' }}>
+              <Code size={16} style={{ color: 'var(--accent-primary)' }} />
+              <span>FCM Admin SDK Message Payload (Topic: all_users)</span>
+            </div>
+            <span className="badge badge-success">Backend: sendBroadcastNotification</span>
+          </div>
+
+          <div style={{ padding: '0 20px 20px', fontSize: '0.85rem' }}>
+            <pre
+              style={{
+                background: 'var(--bg-card)',
+                border: '1px solid var(--border-subtle)',
+                borderRadius: 'var(--radius-sm)',
+                padding: '12px',
+                fontSize: '0.78rem',
+                fontFamily: 'var(--font-mono)',
+                color: 'var(--text-primary)',
+                maxHeight: '220px',
+                overflowY: 'auto',
+                margin: 0,
+              }}
+            >
+              {JSON.stringify(wirePreview, null, 2)}
+            </pre>
+          </div>
+        </div>
+      )}
+
+      {/* Last Dispatched Response Viewer */}
+      {lastResponse && (
+        <div
+          className="card"
+          style={{
+            marginBottom: '20px',
+            border: `1px solid ${lastResponse.success ? 'var(--status-success)' : 'var(--status-error)'}`,
+            background: lastResponse.success ? 'rgba(34, 197, 94, 0.04)' : 'rgba(239, 68, 68, 0.04)',
+          }}
+        >
+          <div className="card-header" style={{ paddingBottom: '6px' }}>
+            <div
+              className="card-title"
+              style={{
+                fontSize: '0.9rem',
+                color: lastResponse.success ? 'var(--status-success)' : 'var(--status-error)',
+              }}
+            >
+              {lastResponse.success ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
+              <span>
+                RESPONSE: {lastResponse.success ? 'Broadcast Delivered to FCM' : 'Broadcast Failed'}
+              </span>
+            </div>
+            <button
+              className="btn btn-outline btn-sm"
+              style={{ fontSize: '0.7rem', padding: '2px 8px' }}
+              onClick={() => setLastResponse(null)}
+            >
+              Dismiss
+            </button>
+          </div>
+          <div style={{ padding: '0 20px 16px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '10px', marginBottom: '10px' }}>
+              <div style={{ fontSize: '0.8rem' }}>
+                <span style={{ color: 'var(--text-muted)' }}>Target Topic:</span> <strong>all_users</strong>
+              </div>
+              <div style={{ fontSize: '0.8rem' }}>
+                <span style={{ color: 'var(--text-muted)' }}>Status:</span> <strong>{lastResponse.status}</strong>
+              </div>
+              {lastResponse.messageId && (
+                <div style={{ fontSize: '0.8rem' }}>
+                  <span style={{ color: 'var(--text-muted)' }}>FCM Message ID:</span>{' '}
+                  <code style={{ fontSize: '0.75rem' }}>{lastResponse.messageId}</code>
+                </div>
+              )}
+            </div>
+            <pre
+              style={{
+                background: 'var(--bg-card)',
+                border: '1px solid var(--border-subtle)',
+                borderRadius: 'var(--radius-sm)',
+                padding: '10px 14px',
+                fontSize: '0.78rem',
+                fontFamily: 'var(--font-mono)',
+                color: 'var(--text-primary)',
+                maxHeight: '160px',
+                overflowY: 'auto',
+                margin: 0,
+              }}
+            >
+              {JSON.stringify(lastResponse, null, 2)}
+            </pre>
+          </div>
+        </div>
+      )}
 
       {activeTab === 'composer' ? (
         <div className="fcm-grid-layout">
@@ -179,51 +320,39 @@ export const NotificationCenterView: React.FC = () => {
             <div className="card-header">
               <div className="card-title">
                 <Send size={18} />
-                <span>Compose Push Notification Payload</span>
+                <span>Compose Broadcast Notification</span>
               </div>
-              <span className="badge badge-success">FCM v1 Protocol</span>
+              <span className="badge badge-success">Target: All APK Users</span>
             </div>
 
-            <form onSubmit={handleSendBroadcast}>
-              {/* Audience Targeting Grid */}
-              <div className="form-group">
-                <label className="form-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <span>1. Select Target Audience Segment</span>
-                  <span style={{ color: 'var(--accent-primary)', fontWeight: 600 }}>
-                    Estimated Reach: {activeSegmentDef.estimatedCount.toLocaleString()} devices
-                  </span>
-                </label>
-
-                <div className="audience-segment-grid">
-                  {AUDIENCE_SEGMENTS.map((seg) => {
-                    const isSelected = selectedAudience === seg.id;
-                    return (
-                      <div
-                        key={seg.id}
-                        className={`audience-card-selectable ${isSelected ? 'selected' : ''}`}
-                        onClick={() => setSelectedAudience(seg.id)}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <span style={{ fontSize: '0.825rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                            {seg.name}
-                          </span>
-                          {seg.id === 'pro_subscribers' && <Crown size={14} style={{ color: '#f59e0b' }} />}
-                        </div>
-                        <div style={{ fontSize: '0.725rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
-                          {seg.description}
-                        </div>
-                        <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--accent-primary)', marginTop: '6px' }}>
-                          {seg.estimatedCount.toLocaleString()} Tokens
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+            {/* Clean Broadcast Info Banner */}
+            <div
+              style={{
+                margin: '0 20px 16px',
+                padding: '12px 14px',
+                background: 'rgba(59, 130, 246, 0.08)',
+                border: '1px solid rgba(59, 130, 246, 0.2)',
+                borderRadius: 'var(--radius-sm)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                fontSize: '0.825rem',
+              }}
+            >
+              <Globe size={18} style={{ color: 'var(--accent-primary)', flexShrink: 0 }} />
+              <div>
+                <strong style={{ color: 'var(--text-primary)' }}>Automatic Global Audience:</strong>{' '}
+                <span style={{ color: 'var(--text-secondary)' }}>
+                  This notification will be broadcast to all users who installed the APK via topic{' '}
+                  <code style={{ background: 'var(--bg-card)', padding: '2px 6px', borderRadius: '4px' }}>/topics/all_users</code>.
+                </span>
               </div>
+            </div>
 
+            <form onSubmit={handleSendBroadcast} style={{ padding: '0 20px 20px' }}>
               {/* Title & Body */}
-              <div className="form-group" style={{ marginTop: '18px' }}>
-                <label className="form-label">2. Notification Title</label>
+              <div className="form-group">
+                <label className="form-label">Notification Title *</label>
                 <input
                   type="text"
                   className="form-input"
@@ -235,21 +364,22 @@ export const NotificationCenterView: React.FC = () => {
               </div>
 
               <div className="form-group">
-                <label className="form-label">3. Message Body (Lockscreen preview text)</label>
+                <label className="form-label">Message Body * (Lockscreen preview text)</label>
                 <textarea
                   className="form-textarea"
                   placeholder="e.g. Save 30% on selected boutique items this Friday only."
                   value={body}
                   onChange={(e) => setBody(e.target.value)}
                   required
+                  rows={3}
                 />
               </div>
 
-              {/* Client App Route / Screen & Deep Link */}
+              {/* Client App Route / Screen & Image */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                 <div className="form-group">
                   <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <Link2 size={14} /> 4. Client App Screen (Route)
+                    <Link2 size={14} /> App Screen / Route
                   </label>
                   <select
                     className="form-select"
@@ -277,22 +407,36 @@ export const NotificationCenterView: React.FC = () => {
 
                 <div className="form-group">
                   <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <ImageIcon size={14} /> 5. Image Attachment URL (Optional)
+                    <ImageIcon size={14} /> Image Attachment URL (Optional)
                   </label>
                   <input
                     type="url"
                     className="form-input"
-                    placeholder="https://..."
+                    placeholder="https://images.unsplash.com/..."
                     value={imageUrl}
                     onChange={(e) => setImageUrl(e.target.value)}
                   />
                 </div>
               </div>
 
-              {/* External Web Link & Custom JSON Arguments */}
+              {/* Action Tag & External Web Link */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                 <div className="form-group">
-                  <label className="form-label">6. External Web URL (Optional)</label>
+                  <label className="form-label">Action Type</label>
+                  <select
+                    className="form-select"
+                    value={actionTag}
+                    onChange={(e) => setActionTag(e.target.value)}
+                  >
+                    <option value="promotion">promotion</option>
+                    <option value="announcement">announcement</option>
+                    <option value="force_update">force_update</option>
+                    <option value="due_reminder">due_reminder</option>
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">External Web URL (Optional)</label>
                   <input
                     type="url"
                     className="form-input"
@@ -301,24 +445,11 @@ export const NotificationCenterView: React.FC = () => {
                     onChange={(e) => setExternalUrl(e.target.value)}
                   />
                 </div>
-
-                <div className="form-group">
-                  <label className="form-label">7. Action Tag / Type</label>
-                  <select
-                    className="form-select"
-                    value={actionTag}
-                    onChange={(e) => setActionTag(e.target.value)}
-                  >
-                    <option value="promotion">promotion</option>
-                    <option value="force_update">force_update</option>
-                    <option value="due_reminder">due_reminder</option>
-                    <option value="announcement">announcement</option>
-                  </select>
-                </div>
               </div>
 
+              {/* Custom JSON Arguments */}
               <div className="form-group">
-                <label className="form-label">8. Custom Arguments (JSON format, e.g. {`{"filter": "unpaid"}`})</label>
+                <label className="form-label">Custom Arguments (Optional JSON, e.g. {`{"filter": "unpaid"}`})</label>
                 <input
                   type="text"
                   className="form-input"
@@ -329,7 +460,7 @@ export const NotificationCenterView: React.FC = () => {
                 />
               </div>
 
-              {/* Advanced Controls */}
+              {/* Delivery Settings */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                 <div className="form-group">
                   <label className="form-label">Delivery Priority</label>
@@ -338,8 +469,8 @@ export const NotificationCenterView: React.FC = () => {
                     value={priority}
                     onChange={(e) => setPriority(e.target.value as NotificationPriority)}
                   >
-                    <option value="high">High (Wake device / immediate APNs)</option>
-                    <option value="normal">Normal (Power-efficient battery friendly)</option>
+                    <option value="high">High (Immediate push delivery)</option>
+                    <option value="normal">Normal (Power efficient)</option>
                   </select>
                 </div>
 
@@ -350,9 +481,9 @@ export const NotificationCenterView: React.FC = () => {
                     value={sound}
                     onChange={(e) => setSound(e.target.value as any)}
                   >
-                    <option value="alert">Default Alert Sound</option>
-                    <option value="default">System Default</option>
-                    <option value="silent">Silent (Badge only)</option>
+                    <option value="alert">Alert Sound</option>
+                    <option value="default">Default Sound</option>
+                    <option value="silent">Silent</option>
                   </select>
                 </div>
               </div>
@@ -366,7 +497,7 @@ export const NotificationCenterView: React.FC = () => {
                     onChange={(e) => setScheduleLater(e.target.checked)}
                     style={{ accentColor: 'var(--accent-primary)' }}
                   />
-                  <span>Schedule this notification for a future date & time</span>
+                  <span>Schedule this broadcast for a future date & time</span>
                 </label>
                 {scheduleLater && (
                   <input
@@ -375,32 +506,13 @@ export const NotificationCenterView: React.FC = () => {
                     style={{ marginTop: '8px' }}
                     value={scheduledDate}
                     onChange={(e) => setScheduledDate(e.target.value)}
+                    required={scheduleLater}
                   />
                 )}
               </div>
 
-              {/* Privacy Guarantee Note */}
-              <div
-                style={{
-                  background: 'var(--bg-surface)',
-                  border: '1px solid var(--border-subtle)',
-                  borderRadius: 'var(--radius-sm)',
-                  padding: '12px 14px',
-                  marginBottom: '20px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '10px',
-                  fontSize: '0.8rem',
-                  color: 'var(--text-secondary)',
-                }}
-              >
-                <Shield size={18} style={{ color: 'var(--status-success)', flexShrink: 0 }} />
-                <span>
-                  <strong>RBAC Privacy Guarantee:</strong> Broadcast targets topic subscription tokens. Individual customer email addresses, phone records, and billing details are masked from Marketing Admin credentials.
-                </span>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+              {/* Send Button */}
+              <div style={{ marginTop: '20px' }}>
                 <button
                   type="submit"
                   className="btn btn-primary btn-lg"
@@ -410,10 +522,10 @@ export const NotificationCenterView: React.FC = () => {
                   <Send size={18} />
                   <span>
                     {isSending
-                      ? 'Dispatching FCM Push...'
+                      ? 'Broadcasting via Secure Cloud Function...'
                       : scheduleLater
-                      ? 'Schedule Notification Broadcast'
-                      : `Broadcast to ${activeSegmentDef.estimatedCount.toLocaleString()} Users Now`}
+                      ? 'Schedule Broadcast to All Users'
+                      : 'Broadcast Push to All APK Users Now'}
                   </span>
                 </button>
               </div>
@@ -425,7 +537,7 @@ export const NotificationCenterView: React.FC = () => {
             title={title}
             body={body}
             imageUrl={imageUrl}
-            deepLink={deepLink}
+            deepLink={effectiveRoute || externalUrl}
             sound={sound}
             priority={priority}
           />
@@ -436,11 +548,11 @@ export const NotificationCenterView: React.FC = () => {
           <table className="data-table">
             <thead>
               <tr>
-                <th>Campaign Title & Payload</th>
-                <th>Target Segment</th>
+                <th>Campaign Title & Message</th>
+                <th>Target Topic</th>
                 <th>Status</th>
-                <th>Delivered / Reach</th>
-                <th>Open Rate (CTR)</th>
+                <th>FCM Message ID</th>
+                <th>Route / Action</th>
                 <th>Sent At</th>
                 <th>Dispatched By</th>
               </tr>
@@ -450,8 +562,8 @@ export const NotificationCenterView: React.FC = () => {
                 <tr>
                   <td colSpan={7} style={{ textAlign: 'center', padding: '36px', color: 'var(--text-muted)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                      <Loader2 size={18} className="spin" style={{ color: 'var(--accent-primary)' }} />
-                      <span>Loading push campaigns from Firestore...</span>
+                      <Loader2 size={18} className="spin-anim" style={{ color: 'var(--accent-primary)' }} />
+                      <span>Loading push history from Firestore...</span>
                     </div>
                   </td>
                 </tr>
@@ -461,53 +573,69 @@ export const NotificationCenterView: React.FC = () => {
                     <Send size={28} style={{ margin: '0 auto 8px', opacity: 0.4 }} />
                     <div style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>No Broadcast Campaigns in Firestore</div>
                     <div style={{ fontSize: '0.8rem', marginTop: '4px' }}>
-                      Switch to the &ldquo;Campaign Composer&rdquo; tab above to broadcast push notifications to user devices.
+                      Switch to the &ldquo;Compose Broadcast&rdquo; tab above to send push notifications to all users.
                     </div>
                   </td>
                 </tr>
               ) : (
                 campaigns.map((camp) => (
                   <tr key={camp.id}>
-                  <td>
-                    <div>
-                      <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{camp.title}</div>
-                      <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '2px' }}>{camp.body}</div>
-                    </div>
-                  </td>
-                  <td>
-                    <span className="badge badge-neutral">
-                      {camp.audience.replace(/_/g, ' ').toUpperCase()}
-                    </span>
-                  </td>
-                  <td>
-                    <span className={`badge ${camp.status === 'completed' ? 'badge-success' : 'badge-warning'}`}>
-                      {camp.status}
-                    </span>
-                  </td>
-                  <td>
-                    <div>
-                      <span style={{ fontWeight: 600 }}>{camp.metrics.deliveredCount.toLocaleString()}</span>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                        {' '}/ {camp.audienceEstimatedCount.toLocaleString()} ({camp.metrics.deliveryRatePct}%)
+                    <td>
+                      <div>
+                        <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{camp.title}</div>
+                        <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '2px' }}>{camp.body}</div>
+                      </div>
+                    </td>
+                    <td>
+                      <span className="badge badge-primary">
+                        /topics/all_users
                       </span>
-                    </div>
-                  </td>
-                  <td>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--status-success)', fontWeight: 600 }}>
-                      <TrendingUp size={14} />
-                      <span>{camp.metrics.openRatePct}%</span>
-                    </div>
-                  </td>
-                  <td>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                      {camp.sentAt ? new Date(camp.sentAt).toLocaleDateString() : 'Scheduled'}
-                    </span>
-                  </td>
-                  <td>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                      {camp.createdBy.adminName}
-                    </span>
-                  </td>
+                    </td>
+                    <td>
+                      <span
+                        className={`badge ${
+                          camp.status === 'sent_to_fcm' || camp.status === 'completed'
+                            ? 'badge-success'
+                            : camp.status === 'scheduled'
+                            ? 'badge-warning'
+                            : camp.status === 'failed'
+                            ? 'badge-error'
+                            : 'badge-neutral'
+                        }`}
+                      >
+                        {camp.status === 'sent_to_fcm'
+                          ? 'Sent to FCM'
+                          : camp.status === 'completed'
+                          ? 'Delivered'
+                          : camp.status === 'failed'
+                          ? 'Failed'
+                          : camp.status}
+                      </span>
+                    </td>
+                    <td>
+                      <span style={{ fontSize: '0.75rem', fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>
+                        {camp.fcmMessageId ? `${camp.fcmMessageId.substring(0, 24)}...` : '—'}
+                      </span>
+                    </td>
+                    <td>
+                      <span style={{ fontSize: '0.8rem', fontFamily: 'var(--font-mono)', color: 'var(--accent-primary)' }}>
+                        {camp.deepLink || '/'}
+                      </span>
+                    </td>
+                    <td>
+                      <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                        {camp.sentAt
+                          ? new Date(camp.sentAt).toLocaleString()
+                          : camp.scheduledFor
+                          ? `Scheduled: ${new Date(camp.scheduledFor).toLocaleString()}`
+                          : 'Queued'}
+                      </span>
+                    </td>
+                    <td>
+                      <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                        {camp.createdBy?.adminName || 'Admin'}
+                      </span>
+                    </td>
                   </tr>
                 ))
               )}

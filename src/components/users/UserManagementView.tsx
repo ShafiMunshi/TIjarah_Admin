@@ -16,7 +16,6 @@ import {
   Crown,
   RotateCcw,
   Filter,
-  Send,
   Smartphone,
   Zap,
   Loader2,
@@ -26,7 +25,6 @@ import { useAuth } from '../../context/AuthContext';
 import { firestoreService } from '../../services/firestoreService';
 import { useToast } from '../../context/ToastContext';
 import { EditUserModal } from './EditUserModal';
-import { DirectNotificationModal } from './DirectNotificationModal';
 import { UserDevicesModal } from './UserDevicesModal';
 
 export const UserManagementView: React.FC = () => {
@@ -59,7 +57,6 @@ export const UserManagementView: React.FC = () => {
 
   // Modals
   const [selectedUserForEdit, setSelectedUserForEdit] = useState<AppUser | null>(null);
-  const [selectedUserForNotify, setSelectedUserForNotify] = useState<AppUser | null>(null);
   const [selectedUserForDevices, setSelectedUserForDevices] = useState<AppUser | null>(null);
 
   // Firestore cursor map for fast back/forward navigation without reading skipped documents
@@ -68,7 +65,6 @@ export const UserManagementView: React.FC = () => {
   const canEdit = hasPermission('users:edit');
   const canViewEmail = hasPermission('users:view_email') || role === 'super_admin';
   const canExport = hasPermission('users:export');
-  const canNotify = hasPermission('fcm:compose') || hasPermission('fcm:broadcast') || role === 'super_admin' || role === 'app_manager';
 
   // Server-side page fetcher
   const loadPage = useCallback(
@@ -721,17 +717,6 @@ export const UserManagementView: React.FC = () => {
                           <Smartphone size={13} style={{ color: 'var(--status-success)' }} />
                         </button>
 
-                        {/* Send Notification button */}
-                        <button
-                          className="btn btn-outline btn-sm btn-icon-only"
-                          onClick={() => setSelectedUserForNotify(user)}
-                          disabled={!canNotify}
-                          title={!canNotify ? 'Push broadcast restricted' : 'Send Push Message to /topics/user_' + user.id}
-                          style={{ padding: '5px 7px' }}
-                        >
-                          <Send size={13} style={{ color: 'var(--accent-primary)' }} />
-                        </button>
-
                         {/* Edit User button */}
                         <button
                           className="btn btn-secondary btn-sm"
@@ -813,21 +798,11 @@ export const UserManagementView: React.FC = () => {
         }}
       />
 
-      {/* Direct Push Modal */}
-      <DirectNotificationModal
-        user={selectedUserForNotify}
-        isOpen={!!selectedUserForNotify}
-        onClose={() => setSelectedUserForNotify(null)}
-      />
-
       {/* Connected Devices Modal */}
       <UserDevicesModal
         user={selectedUserForDevices}
         isOpen={!!selectedUserForDevices}
         onClose={() => setSelectedUserForDevices(null)}
-        onSendNotificationToUser={(u) => {
-          setSelectedUserForNotify(u);
-        }}
       />
     </div>
   );
